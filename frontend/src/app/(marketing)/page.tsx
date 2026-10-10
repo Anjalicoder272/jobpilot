@@ -1,6 +1,7 @@
 import { ArrowRight, Check, FileCheck2, Lock, Tags } from "lucide-react";
 import type { Metadata } from "next";
 import DemoBoard from "@/components/landing/DemoBoard";
+import Parallax from "@/components/landing/Parallax";
 import { MatchPreview, PrepPreview, TrackPreview } from "@/components/landing/Previews";
 import Reveal from "@/components/Reveal";
 import { ButtonLink } from "@/components/ui/Button";
@@ -98,9 +99,12 @@ export default function Home() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
 
       <section className="relative overflow-hidden">
-        <div aria-hidden className="bg-grid pointer-events-none absolute inset-x-0 top-0 h-[640px]" />
+        <Parallax aria-hidden speed={140} className="pointer-events-none absolute inset-x-0 top-0 h-[720px]">
+          <div className="bg-grid h-full" />
+        </Parallax>
         <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-14 sm:px-6 sm:pt-24">
-          <div className="stagger mx-auto max-w-3xl text-center">
+          <Parallax speed={-70} fadeOut className="mx-auto max-w-3xl">
+          <div className="stagger text-center">
             <p className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-xs">
               <span className="h-1.5 w-1.5 rounded-full bg-success" /> Free while in beta
             </p>
@@ -121,10 +125,13 @@ export default function Home() {
               </ButtonLink>
             </div>
           </div>
+          </Parallax>
 
-          <Reveal delay={150} className="mx-auto mt-14 max-w-4xl sm:mt-16">
-            <DemoBoard />
-          </Reveal>
+          <Parallax speed={40} scaleFrom={0.94} className="mx-auto mt-14 max-w-4xl origin-top sm:mt-16">
+            <Reveal delay={150}>
+              <DemoBoard />
+            </Reveal>
+          </Parallax>
         </div>
       </section>
 
@@ -157,9 +164,11 @@ export default function Home() {
                     ))}
                   </ul>
                 </Reveal>
-                <Reveal delay={120} className={i % 2 ? "md:order-1" : ""}>
-                  <Preview />
-                </Reveal>
+                <Parallax speed={-60} className={i % 2 ? "md:order-1" : ""}>
+                  <Reveal delay={120}>
+                    <Preview />
+                  </Reveal>
+                </Parallax>
               </div>
             ))}
           </div>
@@ -238,11 +247,14 @@ export default function Home() {
       <section className="px-4 pb-20 sm:px-6">
         <Reveal className="mx-auto max-w-6xl">
           <div className="relative overflow-hidden rounded-3xl bg-primary px-6 py-16 text-center text-on-primary sm:py-20">
-            <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-tight sm:text-[40px] sm:leading-[1.1]">
+            <Parallax aria-hidden speed={80} className="pointer-events-none absolute inset-0 opacity-[0.07]">
+              <div className="bg-grid h-full [--border:currentColor] [mask-image:none]" />
+            </Parallax>
+            <h2 className="relative mx-auto max-w-2xl text-3xl font-semibold tracking-tight sm:text-[40px] sm:leading-[1.1]">
               Your next offer starts with a clear board.
             </h2>
-            <p className="mx-auto mt-4 max-w-md text-on-primary/70">Set it up in under a minute. Free while in beta.</p>
-            <ButtonLink href="/signup" size="lg" variant="secondary" className="mt-8 border-transparent">
+            <p className="relative mx-auto mt-4 max-w-md text-on-primary/70">Set it up in under a minute. Free while in beta.</p>
+            <ButtonLink href="/signup" size="lg" variant="secondary" className="relative mt-8 border-transparent">
               Create your free board <ArrowRight size={16} />
             </ButtonLink>
           </div>
