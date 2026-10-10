@@ -7,7 +7,8 @@ import { useAIStatus } from "@/components/ai/AIBadge";
 import ExperienceCard from "@/components/experiences/ExperienceCard";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { inputClass } from "@/components/ui/Field";
-import { Card, EmptyState, PageHeader, Segmented, Skeleton } from "@/components/ui/primitives";
+import { Card, EmptyState, PageHeader, Skeleton } from "@/components/ui/primitives";
+import { Pill, Segmented } from "@/components/ui/Segmented";
 import { Spinner } from "@/components/ui/Spinner";
 import { api, errorMessage } from "@/lib/api";
 import { LEVELS, TOPICS, type Experience, type Page, type TopicCount } from "@/lib/types";
@@ -56,7 +57,9 @@ export default function ExperiencesFeed({
     const p = new URLSearchParams(params.toString());
     if (value) p.set(key, value);
     else p.delete(key);
-    router.replace(`${pathname}${p.size ? `?${p}` : ""}`, { scroll: false });
+    // History API instead of router.replace: Next keeps useSearchParams in sync without remounting the
+    // page, so filter controls keep their state and animate instead of re-rendering from scratch.
+    window.history.replaceState(null, "", `${pathname}${p.size ? `?${p}` : ""}`);
   }
 
   useEffect(() => {
@@ -175,23 +178,15 @@ export default function ExperiencesFeed({
 
       <div role="group" aria-label="Topic" className="scrollbar-none -mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
         {[{ value: "", label: "All topics" }, ...TOPICS].map((t) => (
-          <button
-            key={t.value}
-            onClick={() => setParam("topic", t.value)}
-            aria-pressed={topic === t.value}
-            className={cn(
-              "h-8 shrink-0 rounded-full border px-3 text-[13px] font-medium transition-colors pointer-coarse:h-10",
-              topic === t.value ? "border-primary bg-primary text-on-primary" : "border-border bg-surface text-muted hover:border-border-strong hover:text-text",
-            )}
-          >
+          <Pill key={t.value} selected={topic === t.value} onClick={() => setParam("topic", t.value)}>
             {t.label}
-          </button>
+          </Pill>
         ))}
         {hasFilters && (
           <button
             onClick={() => {
               setSearchText("");
-              router.replace(pathname, { scroll: false });
+              window.history.replaceState(null, "", pathname);
             }}
             className="h-8 shrink-0 px-2 text-[13px] font-medium text-muted underline-offset-4 hover:text-text hover:underline"
           >

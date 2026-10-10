@@ -9,7 +9,7 @@ import { Badge, SectionLabel, Skeleton } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/Toast";
 import { api, errorMessage, post } from "@/lib/api";
 import type { Application, CompanyInsights, PrepPlan } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { atLeast, cn } from "@/lib/utils";
 import WebExperienceList from "../experiences/WebExperienceList";
 import { SourceBadge, useAIStatus } from "./AIBadge";
 
@@ -70,7 +70,7 @@ export default function PrepPanel({ app }: { app: Application }) {
     setBusy(true);
     setError("");
     try {
-      setPlan((await post<PlanResponse>(`/api/applications/${app.id}/prep/`)).plan);
+      setPlan((await atLeast(post<PlanResponse>(`/api/applications/${app.id}/prep/`), 600)).plan);
       toast({ title: plan ? "Prep plan rebuilt" : "Your prep plan is ready" });
     } catch (e) {
       setError(errorMessage(e, "Couldn't build the plan."));

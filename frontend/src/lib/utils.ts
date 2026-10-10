@@ -38,3 +38,20 @@ export function companyTint(name: string) {
 export function plural(n: number, word: string, many = `${word}s`) {
   return `${n} ${n === 1 ? word : many}`;
 }
+
+/** Resolves no sooner than `ms`, so very fast responses still show their loading state instead of flickering. */
+export function atLeast<T>(promise: Promise<T>, ms = 500): Promise<T> {
+  return Promise.allSettled([promise, new Promise((r) => setTimeout(r, ms))]).then(([result]) =>
+    result.status === "fulfilled" ? result.value : Promise.reject(result.reason),
+  );
+}
+
+export function updatedAgo(date: string | null | undefined) {
+  if (!date) return "";
+  const minutes = Math.round((Date.now() - new Date(date).getTime()) / 60_000);
+  if (minutes < 1) return "Updated just now";
+  if (minutes < 60) return `Updated ${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `Updated ${hours}h ago`;
+  return `Updated ${Math.round(hours / 24)}d ago`;
+}

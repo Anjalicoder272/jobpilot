@@ -8,6 +8,7 @@ import { Field, FormError, Input, Textarea } from "@/components/ui/Field";
 import { Card } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/Toast";
 import { errorMessage, post } from "@/lib/api";
+import { atLeast } from "@/lib/utils";
 import type { Application, ResumeCheck as ResumeCheckResult } from "@/lib/types";
 import { SourceBadge } from "./AIBadge";
 import ScoreRing from "./ScoreRing";
@@ -43,7 +44,7 @@ export default function ResumeCheck() {
     setError("");
     setSaved(null);
     try {
-      const data = await post<ResumeCheckResult>("/api/resume/check/", mode === "link" ? { job_url: jobUrl.trim() } : { jd_text: jdText.trim() });
+      const data = await atLeast(post<ResumeCheckResult>("/api/resume/check/", mode === "link" ? { job_url: jobUrl.trim() } : { jd_text: jdText.trim() }), 600);
       setResult(data);
       setBoard({ company: data.job.company, role: data.job.title });
       if (data.verdict === "ready") toast({ title: "Strong match", description: `${data.score}% fit. You're ready to apply.` });

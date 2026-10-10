@@ -7,7 +7,7 @@ import MatchPanel from "@/components/ai/MatchPanel";
 import PrepPanel from "@/components/ai/PrepPanel";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
-import { Select } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { COLUMNS, type Application, type Status } from "@/lib/types";
 import { safeHref } from "@/lib/utils";
@@ -73,21 +73,14 @@ export default function ApplicationSheet({
         initialFocus="none"
       >
         <div className="flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="stage-select">
-            Stage
-          </label>
           <Select
             id="stage-select"
+            aria-label="Stage"
             value={shown.status}
-            onChange={(e) => onMove(shown, e.target.value as Status)}
-            className="h-9 max-w-44 pointer-coarse:h-11"
-          >
-            {COLUMNS.map((c) => (
-              <option key={c.status} value={c.status}>
-                {c.label}
-              </option>
-            ))}
-          </Select>
+            onChange={(status) => onMove(shown, status)}
+            options={COLUMNS.map((c) => ({ value: c.status, label: c.label, dot: c.color }))}
+            className="h-9 w-44"
+          />
           {jobLink && (
             <a href={jobLink} target="_blank" rel="noopener noreferrer" className={buttonClass({ variant: "secondary", size: "sm", className: "h-9" })}>
               Job post <ExternalLink size={13} />

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SourceBadge } from "@/components/ai/AIBadge";
 import { Button, ButtonLink } from "@/components/ui/Button";
-import { Field, FormError, Input, Select, Textarea } from "@/components/ui/Field";
+import { Field, FormError, Input, Textarea } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { Card, PageHeader, Skeleton } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, errorMessage, post } from "@/lib/api";
@@ -16,6 +17,16 @@ type QuestionDraft = { key: number; text: string; topic: string; difficulty: str
 let nextKey = 1;
 const emptyQuestion = (): QuestionDraft => ({ key: nextKey++, text: "", topic: "JAVASCRIPT", difficulty: "MEDIUM" });
 const MAX_QUESTIONS = 30;
+const RESULTS = [
+  { value: "SELECTED", label: "Selected" },
+  { value: "REJECTED", label: "Rejected" },
+  { value: "PENDING", label: "Waiting for result" },
+];
+const DIFFICULTIES = [
+  { value: "EASY", label: "Easy", dot: "var(--success)" },
+  { value: "MEDIUM", label: "Medium", dot: "var(--warning)" },
+  { value: "HARD", label: "Hard", dot: "var(--danger)" },
+];
 
 type Errors = Partial<Record<"company" | "role" | "summary" | "questions" | "rounds", string>>;
 
@@ -33,7 +44,7 @@ export default function NewExperiencePage() {
   const [extractSource, setExtractSource] = useState<"" | "ai" | "basic">("");
   const [heldForReview, setHeldForReview] = useState("");
 
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm({ ...form, [key]: e.target.value });
     if (errors[key as keyof Errors]) setErrors({ ...errors, [key]: undefined });
   };
@@ -149,20 +160,10 @@ export default function NewExperiencePage() {
               <Input value={form.role} onChange={set("role")} placeholder="e.g. Frontend Engineer" maxLength={150} />
             </Field>
             <Field label="Level">
-              <Select value={form.level} onChange={set("level")}>
-                {LEVELS.map((l) => (
-                  <option key={l.value} value={l.value}>
-                    {l.label}
-                  </option>
-                ))}
-              </Select>
+              <Select value={form.level} onChange={(level) => setForm({ ...form, level })} options={LEVELS} />
             </Field>
             <Field label="Result">
-              <Select value={form.result} onChange={set("result")}>
-                <option value="SELECTED">Selected</option>
-                <option value="REJECTED">Rejected</option>
-                <option value="PENDING">Waiting for result</option>
-              </Select>
+              <Select value={form.result} onChange={(result) => setForm({ ...form, result })} options={RESULTS} />
             </Field>
             <Field label="Number of rounds" error={errors.rounds}>
               <Input type="number" inputMode="numeric" min={1} max={20} value={form.rounds} onChange={set("rounds")} />
@@ -241,18 +242,8 @@ export default function NewExperiencePage() {
                   )}
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 pl-7">
-                  <Select aria-label={`Topic for question ${i + 1}`} value={q.topic} onChange={(e) => updateQuestion(q.key, { topic: e.target.value })}>
-                    {TOPICS.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </Select>
-                  <Select aria-label={`Difficulty for question ${i + 1}`} value={q.difficulty} onChange={(e) => updateQuestion(q.key, { difficulty: e.target.value })}>
-                    <option value="EASY">Easy</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HARD">Hard</option>
-                  </Select>
+                  <Select aria-label={`Topic for question ${i + 1}`} value={q.topic} onChange={(topic) => updateQuestion(q.key, { topic })} options={TOPICS} />
+                  <Select aria-label={`Difficulty for question ${i + 1}`} value={q.difficulty} onChange={(difficulty) => updateQuestion(q.key, { difficulty })} options={DIFFICULTIES} />
                 </div>
               </li>
             ))}

@@ -8,7 +8,7 @@ type Size = "sm" | "md" | "lg" | "icon";
 
 const base =
   "relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium " +
-  "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out " +
+  "transition-[background-color,border-color,color,box-shadow,scale] duration-150 ease-out " +
   "active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 aria-busy:pointer-events-none";
 
 const variants: Record<Variant, string> = {

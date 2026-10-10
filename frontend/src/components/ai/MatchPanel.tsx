@@ -8,6 +8,7 @@ import { FormError } from "@/components/ui/Field";
 import { EmptyState, Skeleton } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/Toast";
 import { errorMessage, post } from "@/lib/api";
+import { atLeast } from "@/lib/utils";
 import type { Application } from "@/lib/types";
 import { SourceBadge } from "./AIBadge";
 import ScoreRing from "./ScoreRing";
@@ -34,7 +35,7 @@ export default function MatchPanel({
     setBusy(true);
     setError("");
     try {
-      const updated = await post<Application>(`/api/applications/${app.id}/match/`);
+      const updated = await atLeast(post<Application>(`/api/applications/${app.id}/match/`), 600);
       onUpdated(updated);
       toast({ title: `Match score: ${updated.match_score}%` });
     } catch (e) {

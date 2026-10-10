@@ -8,7 +8,7 @@ import { Field, FormError, Input, PasswordInput } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { safeNext } from "@/lib/utils";
+import { atLeast, safeNext } from "@/lib/utils";
 
 type Mode = "login" | "signup";
 type Values = { name: string; email: string; password: string };
@@ -25,12 +25,6 @@ function validate(mode: Mode, v: Values): Errors {
   else if (mode === "signup" && v.password.length < 8) e.password = "Use at least 8 characters.";
   return e;
 }
-
-// Keeps the spinner up long enough to read as feedback instead of a flicker on fast errors.
-const atLeast = <T,>(promise: Promise<T>, ms = 450) =>
-  Promise.allSettled([promise, new Promise((r) => setTimeout(r, ms))]).then(([result]) =>
-    result.status === "fulfilled" ? result.value : Promise.reject(result.reason),
-  );
 
 export default function AuthForm({ mode }: { mode: Mode }) {
   const { user, loading, login, signup } = useAuth();
@@ -72,7 +66,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     setFormError("");
     try {
       const email = values.email.trim().toLowerCase();
-      await atLeast(isSignup ? signup(values.name.trim(), email, values.password) : login(email, values.password));
+      await atLeast(isSignup ? signup(values.name.trim(), email, values.password) : login(email, values.password), 450);
       toast({ title: isSignup ? "Welcome to JobPilot" : "Welcome back", description: isSignup ? "Your board is ready." : undefined });
       router.replace(next);
     } catch (err) {

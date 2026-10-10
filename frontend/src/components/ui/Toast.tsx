@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 type Tone = "success" | "error" | "info";
 type ToastInput = { title: string; description?: string; tone?: Tone; action?: { label: string; onClick: () => void }; duration?: number };
-type ToastItem = ToastInput & { id: number; leaving?: boolean };
+type ToastItem = ToastInput & { id: number; leaving?: boolean; version: number };
 
 const ToastContext = createContext<((t: ToastInput) => void) | null>(null);
 
@@ -23,8 +23,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const toast = useCallback((input: ToastInput) => {
-    const id = nextId.current++;
-    setItems((list) => [...list.slice(-2), { tone: "success", ...input, id }]);
+    setItems((list) => {
+      // A repeat of a visible toast refreshes it instead of stacking a duplicate.
+      const same = list.find((t) => !t.leaving && t.title === input.title && t.description === input.description);
+      if (same) return list.map((t) => (t === same ? { ...t, ...input, version: t.version + 1 } : t));
+      return [...list.slice(-2), { tone: "success", ...input, id: nextId.current++, version: 0 }];
+    });
   }, []);
 
   return (
@@ -50,7 +54,7 @@ function ToastView({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
     if (paused) return;
     const t = setTimeout(onDismiss, item.duration ?? (item.action ? 6000 : 3500));
     return () => clearTimeout(t);
-  }, [paused, item.duration, item.action, onDismiss]);
+  }, [paused, item.duration, item.action, item.version, onDismiss]);
 
   return (
     <div

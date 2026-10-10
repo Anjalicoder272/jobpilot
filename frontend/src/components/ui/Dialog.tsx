@@ -126,7 +126,7 @@ export function Dialog({
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative flex flex-col bg-surface shadow-lg outline-none transition-[opacity,transform] ease-out",
+          "relative flex flex-col bg-surface shadow-lg outline-none transition-[opacity,translate,scale] ease-out",
           sheet
             ? cn(
                 "mt-auto max-h-[92dvh] w-full rounded-t-2xl border-t border-border sm:ml-auto sm:mt-0 sm:h-full sm:max-h-none sm:max-w-xl sm:rounded-none sm:border-l sm:border-t-0",

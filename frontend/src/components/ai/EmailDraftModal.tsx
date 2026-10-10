@@ -8,6 +8,7 @@ import { Field, FormError, Input, Textarea } from "@/components/ui/Field";
 import { Skeleton } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/Toast";
 import { errorMessage, post } from "@/lib/api";
+import { atLeast } from "@/lib/utils";
 import type { Application, EmailDraft } from "@/lib/types";
 import { SourceBadge } from "./AIBadge";
 
@@ -23,7 +24,7 @@ export default function EmailDraftModal({ app, open, onClose }: { app: Applicati
     setLoading(true);
     setError("");
     try {
-      setDraft(await post<EmailDraft>(`/api/applications/${app.id}/email/`));
+      setDraft(await atLeast(post<EmailDraft>(`/api/applications/${app.id}/email/`), 500));
     } catch (e) {
       setError(errorMessage(e, "Couldn't write the email."));
     } finally {

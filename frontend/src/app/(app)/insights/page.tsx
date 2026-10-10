@@ -2,7 +2,7 @@
 
 import { Building2, Check, Copy, ExternalLink, Globe, Lightbulb, RefreshCw, Search, Users } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import WebExperienceList from "@/components/experiences/WebExperienceList";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { FormError, bareInputClass } from "@/components/ui/Field";
@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ApiError, api, errorMessage, post } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 import type { CompanyInsights } from "@/lib/types";
-import { safeHref } from "@/lib/utils";
+import { atLeast, safeHref, updatedAgo } from "@/lib/utils";
 
 const POPULAR = [
   ["Amazon", "SDE-1"],
@@ -89,14 +89,18 @@ function InsightsView() {
     router.push(`${pathname}?company=${encodeURIComponent(c.trim())}&role=${encodeURIComponent(r.trim())}`);
   }
 
+  const refreshInFlight = useRef(false);
+
   async function refresh() {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     setRefreshing(true);
     try {
-      setData(await post<CompanyInsights>("/api/insights/", { company: qCompany, role: qRole }));
-      toast({ title: "Insights refreshed" });
+      setData(await atLeast(post<CompanyInsights>("/api/insights/", { company: qCompany, role: qRole }), 600));
     } catch (e) {
       toast({ title: "Couldn't refresh", description: errorMessage(e), tone: "error" });
     } finally {
+      refreshInFlight.current = false;
       setRefreshing(false);
     }
   }
@@ -172,9 +176,15 @@ function InsightsView() {
                 <h2 className="text-xl font-semibold tracking-tight">{data.company}</h2>
                 <p className="text-sm text-muted">{data.role}</p>
               </div>
-              <Button variant="secondary" size="sm" onClick={refresh} loading={refreshing}>
-                <RefreshCw size={14} /> Refresh
-              </Button>
+              <div className="flex items-center gap-3">
+                <span aria-live="polite" className="hidden text-xs text-subtle sm:inline">
+                  {refreshing ? "" : updatedAgo(data.generated_at)}
+                </span>
+                <Button variant="secondary" size="sm" onClick={refresh} disabled={refreshing} aria-busy={refreshing || undefined} className="min-w-[116px] disabled:opacity-100">
+                  <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                  {refreshing ? "Refreshing…" : "Refresh"}
+                </Button>
+              </div>
             </div>
             {data.overview && <p className="mt-4 text-[15px] leading-relaxed">{data.overview}</p>}
             {data.mode === "web" && (
