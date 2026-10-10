@@ -14,9 +14,13 @@ function useLastMessage(message?: string) {
 export const inputClass =
   "block w-full rounded-lg border border-border bg-surface px-3 text-sm text-text shadow-xs " +
   "placeholder:text-subtle/80 transition-[border-color,box-shadow] duration-150 " +
-  "hover:border-border-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-[var(--ring)] " +
-  "aria-invalid:border-danger aria-invalid:focus:ring-danger/20 disabled:cursor-not-allowed disabled:opacity-60 " +
+  "hover:border-border-strong focus:border-accent/70 focus:outline-none focus:ring-[3px] focus:ring-[var(--ring-soft)] " +
+  "aria-invalid:border-danger aria-invalid:focus:ring-danger/15 disabled:cursor-not-allowed disabled:opacity-60 " +
   "h-10 pointer-coarse:h-11 pointer-coarse:text-base";
+
+/** For inputs that sit inside a bordered container which shows the focus state instead. */
+export const bareInputClass =
+  "block h-10 w-full rounded-lg bg-transparent px-3 text-sm text-text placeholder:text-subtle/80 focus:outline-none pointer-coarse:h-11 pointer-coarse:text-base";
 
 export const textareaClass = cn(inputClass, "h-auto py-2.5 leading-relaxed pointer-coarse:h-auto resize-y");
 

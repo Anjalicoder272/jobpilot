@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import WebExperienceList from "@/components/experiences/WebExperienceList";
 import { Button, ButtonLink } from "@/components/ui/Button";
-import { FormError, Input } from "@/components/ui/Field";
+import { FormError, bareInputClass } from "@/components/ui/Field";
 import { Badge, Card, EmptyState, PageHeader, SectionLabel, Skeleton } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, api, errorMessage, post } from "@/lib/api";
@@ -113,15 +113,15 @@ function InsightsView() {
           e.preventDefault();
           search();
         }}
-        className="mt-6 grid gap-2 rounded-xl border border-border bg-surface p-2 shadow-xs sm:grid-cols-[1fr_1fr_auto]"
+        className="mt-6 grid gap-2 rounded-xl border border-border bg-surface p-2 shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:border-accent/50 focus-within:ring-[3px] focus-within:ring-[var(--ring-soft)] sm:grid-cols-[1fr_1fr_auto]"
       >
         <div className="relative">
           <Building2 size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
-          <Input aria-label="Company" className="border-transparent pl-9 shadow-none hover:border-transparent" placeholder="Company, e.g. Amazon" value={company} onChange={(e) => setCompany(e.target.value)} maxLength={120} />
+          <input aria-label="Company" className={`${bareInputClass} pl-9`} placeholder="Company, e.g. Amazon" value={company} onChange={(e) => setCompany(e.target.value)} maxLength={120} />
         </div>
         <div className="relative border-border max-sm:border-t sm:border-l">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
-          <Input aria-label="Job title" className="border-transparent pl-9 shadow-none hover:border-transparent" placeholder="Job title, e.g. SDE-1" value={role} onChange={(e) => setRole(e.target.value)} maxLength={150} />
+          <input aria-label="Job title" className={`${bareInputClass} pl-9`} placeholder="Job title, e.g. SDE-1" value={role} onChange={(e) => setRole(e.target.value)} maxLength={150} />
         </div>
         <Button type="submit" loading={loading}>
           Search

@@ -90,7 +90,7 @@ function JobCard({
         }}
         className={cn(
           "rounded-xl border border-border bg-surface p-3 shadow-xs outline-none transition-[border-color,box-shadow,opacity] duration-150",
-          "hover:border-border-strong hover:shadow-sm focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-[var(--ring)]",
+          "hover:border-border-strong hover:shadow-sm focus-visible:border-accent/70 focus-visible:ring-[3px] focus-visible:ring-[var(--ring-soft)]",
           isDragging && "opacity-40",
         )}
       >

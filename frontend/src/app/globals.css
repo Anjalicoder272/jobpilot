@@ -36,6 +36,7 @@
   --stage-rejected: #a8a29e;
 
   --ring: rgba(79, 70, 229, 0.35);
+  --ring-soft: rgba(79, 70, 229, 0.14);
   --overlay: rgba(28, 25, 23, 0.4);
 
   --shadow-xs: 0 1px 2px rgba(28, 25, 23, 0.05);
@@ -81,6 +82,7 @@
   --stage-rejected: #78716c;
 
   --ring: rgba(129, 140, 248, 0.45);
+  --ring-soft: rgba(129, 140, 248, 0.2);
   --overlay: rgba(0, 0, 0, 0.6);
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -181,7 +183,13 @@ body.is-dragging * {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
+}
+/* Form controls draw their own focus border and ring. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"][aria-roledescription]:focus-visible {
+  outline: none;
 }
 
 .tabular {
