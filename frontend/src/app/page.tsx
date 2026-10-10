@@ -43,7 +43,7 @@ export default function Home() {
             <Reveal delay={80}>
               <h1 className="font-display text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-6xl">
                 Land your next role with a <br className="hidden sm:block" />
-                <RotatingWords words={["co-pilot", "game plan", "head start", "clear board"]} />
+                <RotatingWords words={["co-pilot", "head start", "clear board"]} />
               </h1>
             </Reveal>
             <Reveal delay={160}>
