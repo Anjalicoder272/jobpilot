@@ -1,17 +1,20 @@
 "use client";
 
-import { BookOpen, CheckCircle2, Circle, Globe, Lightbulb, RefreshCw, Target } from "lucide-react";
+import { ArrowUpRight, Lightbulb, RefreshCw, Target } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, post } from "@/lib/api";
-import type { Application, PrepPlan } from "@/lib/types";
-import { SourceBadge, useAIStatus } from "./AIBadge";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { FormError } from "@/components/ui/Field";
+import { Badge, SectionLabel, Skeleton } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/Toast";
+import { api, errorMessage, post } from "@/lib/api";
+import type { Application, CompanyInsights, PrepPlan } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import WebExperienceList from "../experiences/WebExperienceList";
-import type { CompanyInsights } from "@/lib/types";
+import { SourceBadge, useAIStatus } from "./AIBadge";
 
 type PlanResponse = { plan: PrepPlan | null; generated_at: string | null };
 
-// Ticked tasks are remembered in this browser only.
 function useChecked(appId: number) {
   const key = `prep-done-${appId}`;
   const [done, setDone] = useState<string[]>([]);
@@ -32,6 +35,12 @@ function useChecked(appId: number) {
   return { done, toggle };
 }
 
+const SOURCE = {
+  real: { label: "Asked here", tone: "success" as const },
+  online: { label: "Reported online", tone: "accent" as const },
+  suggested: { label: "Suggested", tone: "neutral" as const },
+};
+
 export default function PrepPanel({ app }: { app: Application }) {
   const [plan, setPlan] = useState<PrepPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,15 +48,16 @@ export default function PrepPanel({ app }: { app: Application }) {
   const [error, setError] = useState("");
   const { done, toggle } = useChecked(app.id);
   const ai = useAIStatus();
+  const toast = useToast();
   const [webPosts, setWebPosts] = useState<CompanyInsights["web_experiences"]>(null);
+  const insightsHref = `/insights?company=${encodeURIComponent(app.company)}&role=${encodeURIComponent(app.role)}`;
 
-  // Real experience posts from other sites (only when web search is configured; results are cached).
   useEffect(() => {
-    if (!ai?.web_search) return;
+    if (!ai?.web_search || !plan) return;
     api<CompanyInsights>(`/api/insights/?company=${encodeURIComponent(app.company)}&role=${encodeURIComponent(app.role)}`)
       .then((d) => setWebPosts(d.web_experiences))
       .catch(() => {});
-  }, [ai?.web_search, app.company, app.role]);
+  }, [ai?.web_search, app.company, app.role, plan]);
 
   useEffect(() => {
     api<PlanResponse>(`/api/applications/${app.id}/prep/`)
@@ -61,183 +71,163 @@ export default function PrepPanel({ app }: { app: Application }) {
     setError("");
     try {
       setPlan((await post<PlanResponse>(`/api/applications/${app.id}/prep/`)).plan);
+      toast({ title: plan ? "Prep plan rebuilt" : "Your prep plan is ready" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't build the plan");
+      setError(errorMessage(e, "Couldn't build the plan."));
     } finally {
       setBusy(false);
     }
   }
 
-  const allTasks = plan?.days.flatMap((d) => d.tasks.map((_, i) => `${d.day}-${i}`)) ?? [];
-  const progress = allTasks.length ? Math.round((allTasks.filter((t) => done.includes(t)).length / allTasks.length) * 100) : 0;
+  if (loading) {
+    return (
+      <div className="space-y-3" aria-busy>
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-20" />
+        <Skeleton className="h-32" />
+      </div>
+    );
+  }
+
+  if (!plan) {
+    return (
+      <div className="rounded-xl border border-border p-6 text-center">
+        <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-accent-soft text-accent-text">
+          <Target size={20} />
+        </span>
+        <h3 className="mt-4 text-[15px] font-semibold">Get a 3-day plan for {app.company}</h3>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
+          Built from questions real candidates were asked here{app.jd_text ? ", the job description" : ""} and your resume.
+        </p>
+        <FormError message={error} />
+        <Button onClick={generate} loading={busy} className="mt-5">
+          <Target size={15} /> Prepare me
+        </Button>
+        {busy && <p className="mt-3 text-xs text-subtle">This takes about 10 to 20 seconds.</p>}
+      </div>
+    );
+  }
+
+  const allTasks = plan.days.flatMap((d) => d.tasks.map((_, i) => `${d.day}-${i}`));
+  const completed = allTasks.filter((t) => done.includes(t)).length;
+  const progress = allTasks.length ? Math.round((completed / allTasks.length) * 100) : 0;
 
   return (
-    <div className="mb-6 overflow-hidden rounded-3xl border border-border">
-      <div className="bg-gradient-brand flex items-center justify-between gap-2 px-5 py-4 text-white">
-        <h3 className="flex items-center gap-2 font-display font-bold">
-          <BookOpen size={18} /> Interview prep · {app.company}
-        </h3>
-        {plan && <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold">{progress}% done</span>}
+    <div className="animate-fade-up space-y-7">
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted">
+            {plan.based_on
+              ? `Based on ${plan.based_on} real question${plan.based_on > 1 ? "s" : ""} shared for ${app.company}.`
+              : `No shared ${app.company} interviews yet, so this follows the job description.`}
+          </p>
+          <SourceBadge source={plan.source} />
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Prep progress">
+            <div className="h-full rounded-full bg-success transition-[width] duration-500 ease-out" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="tabular text-xs font-medium text-muted">
+            {completed}/{allTasks.length} done
+          </span>
+        </div>
       </div>
 
-      <div className="bg-surface p-5">
-        {loading ? (
-          <div className="skeleton h-24" />
-        ) : !plan ? (
-          <div className="text-center">
-            <p className="text-sm text-muted">
-              Get the most-asked topics at {app.company}, likely questions, and a 3-day plan built from real interview
-              experiences{app.jd_text ? ", the job description" : ""} and your resume.
-            </p>
-            <button
-              onClick={generate}
-              disabled={busy}
-              className="press bg-gradient-brand mt-4 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-card disabled:opacity-60"
-            >
-              <Target size={16} className={busy ? "animate-pulse" : ""} />
-              {busy ? "Building your plan…" : "Prepare me"}
-            </button>
-            <p className="mt-3 text-xs text-muted">
-              Tip: look up{" "}
-              <Link href={`/insights?company=${encodeURIComponent(app.company)}&role=${encodeURIComponent(app.role)}`} className="font-semibold text-brand">
-                {app.company} interview insights
-              </Link>{" "}
-              to see real shared questions and links to first-hand experiences.
-            </p>
-          </div>
-        ) : (
-          <div className="pop-in space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-              <span>
-                {plan.based_on
-                  ? `Based on ${plan.based_on} real question${plan.based_on > 1 ? "s" : ""} shared for ${app.company}`
-                  : `No shared ${app.company} interviews yet, so this is based on the job description`}
-              </span>
-              <SourceBadge source={plan.source} />
-            </div>
+      <section>
+        <SectionLabel>Focus on</SectionLabel>
+        <ul className="mt-2.5 grid gap-2 sm:grid-cols-2">
+          {plan.focus_topics.map((f) => (
+            <li key={f.label} className="rounded-lg border border-border p-3">
+              <p className="text-sm font-medium">{f.label}</p>
+              <p className="mt-0.5 text-[13px] text-muted">{f.why}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
 
-            {/* Progress bar */}
-            <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-              <div className="bg-gradient-brand h-full rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
-            </div>
-
-            {/* Focus topics */}
-            <section>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">Focus on</h4>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {plan.focus_topics.map((f) => (
-                  <div key={f.label} className="rounded-2xl bg-surface-2 p-3">
-                    <div className="text-sm font-semibold text-brand">{f.label}</div>
-                    <div className="mt-0.5 text-xs text-muted">{f.why}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Day plan with checkboxes */}
-            <section>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">Your 3-day plan</h4>
-              <ol className="mt-2 space-y-3">
-                {plan.days.map((d) => (
-                  <li key={d.day} className="rounded-2xl border border-border p-3">
-                    <div className="text-sm font-semibold">
-                      Day {d.day} · {d.title}
-                    </div>
-                    <ul className="mt-2 space-y-1.5">
-                      {d.tasks.map((task, i) => {
-                        const id = `${d.day}-${i}`;
-                        const checked = done.includes(id);
-                        return (
-                          <li key={id}>
-                            <button
-                              onClick={() => toggle(id)}
-                              aria-pressed={checked}
-                              className="flex w-full items-start gap-2 text-left text-sm"
-                            >
-                              {checked ? (
-                                <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-[#10b981]" />
-                              ) : (
-                                <Circle size={18} className="mt-0.5 shrink-0 text-muted" />
-                              )}
-                              <span className={checked ? "text-muted line-through" : ""}>{task}</span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </li>
-                ))}
-              </ol>
-            </section>
-
-            {/* Likely questions */}
-            {plan.likely_questions.length > 0 && (
-              <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">Likely questions</h4>
-                <ul className="mt-2 space-y-2">
-                  {plan.likely_questions.map((q) => (
-                    <li key={q.question} className="flex items-start gap-3 rounded-2xl bg-surface-2 px-3.5 py-2.5 text-sm">
-                      <span className="flex-1">{q.question}</span>
-                      {q.source === "real" ? (
-                        <span className="shrink-0 rounded-full bg-[#10b981]/15 px-2 py-0.5 text-[11px] font-semibold text-[#059669]">
-                          Asked at {app.company}
-                        </span>
-                      ) : q.source === "online" ? (
-                        <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand">
-                          Reported online
-                        </span>
-                      ) : (
-                        <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-muted">
-                          Suggested
-                        </span>
-                      )}
+      <section>
+        <SectionLabel>Your 3-day plan</SectionLabel>
+        <ol className="mt-2.5 space-y-4">
+          {plan.days.map((d) => (
+            <li key={d.day}>
+              <p className="text-sm font-medium">
+                <span className="text-subtle">Day {d.day} · </span>
+                {d.title}
+              </p>
+              <ul className="mt-1.5">
+                {d.tasks.map((task, i) => {
+                  const id = `${d.day}-${i}`;
+                  const checked = done.includes(id);
+                  return (
+                    <li key={id}>
+                      <label className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggle(id)}
+                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-strong accent-[var(--success)]"
+                        />
+                        <span className={cn("text-sm transition-colors", checked && "text-subtle line-through")}>{task}</span>
+                      </label>
                     </li>
-                  ))}
-                </ul>
-              </section>
-            )}
+                  );
+                })}
+              </ul>
+            </li>
+          ))}
+        </ol>
+      </section>
 
-            {/* Real posts on other sites */}
-            {webPosts && webPosts.length > 0 && (
-              <section>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">Real {app.company} experiences online</h4>
-                <div className="mt-2">
-                  <WebExperienceList items={webPosts.slice(0, 5)} compact />
-                </div>
-              </section>
-            )}
+      {plan.likely_questions.length > 0 && (
+        <section>
+          <SectionLabel>Likely questions</SectionLabel>
+          <ul className="mt-2.5 divide-y divide-border rounded-xl border border-border">
+            {plan.likely_questions.map((q) => (
+              <li key={q.question} className="flex items-start gap-3 px-3.5 py-3 text-sm">
+                <span className="flex-1">{q.question}</span>
+                <Badge tone={SOURCE[q.source].tone}>{SOURCE[q.source].label}</Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
-            {/* Tips */}
-            {plan.tips.length > 0 && (
-              <section className="rounded-2xl bg-brand-soft p-4">
-                <h4 className="flex items-center gap-1.5 text-sm font-semibold text-brand">
-                  <Lightbulb size={16} /> Tips
-                </h4>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                  {plan.tips.map((t) => (
-                    <li key={t}>{t}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              <button onClick={generate} disabled={busy}
-                className="press inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-semibold disabled:opacity-60">
-                <RefreshCw size={15} className={busy ? "animate-spin" : ""} /> {busy ? "Rebuilding…" : "Rebuild plan"}
-              </button>
-              <Link href={`/insights?company=${encodeURIComponent(app.company)}&role=${encodeURIComponent(app.role)}`}
-                className="press inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-semibold">
-                <Globe size={15} /> {app.company} interview insights
-              </Link>
-              <Link href={`/experiences?company=${app.company_slug}`}
-                className="press inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-semibold">
-                <BookOpen size={15} /> All {app.company} experiences
-              </Link>
-            </div>
+      {webPosts && webPosts.length > 0 && (
+        <section>
+          <SectionLabel>Real {app.company} experiences online</SectionLabel>
+          <div className="mt-2.5">
+            <WebExperienceList items={webPosts.slice(0, 5)} compact />
           </div>
-        )}
-        {error && <p role="alert" className="mt-3 text-sm text-[#e11d48]">{error}</p>}
+        </section>
+      )}
+
+      {plan.tips.length > 0 && (
+        <section className="rounded-xl bg-surface-2 p-4">
+          <h4 className="flex items-center gap-1.5 text-sm font-medium">
+            <Lightbulb size={15} className="text-warning" /> Tips
+          </h4>
+          <ul className="mt-2 space-y-1.5 text-sm text-muted">
+            {plan.tips.map((t) => (
+              <li key={t} className="flex gap-2">
+                <span aria-hidden className="mt-2 h-1 w-1 shrink-0 rounded-full bg-subtle" />
+                {t}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <FormError message={error} />
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={generate} loading={busy}>
+          <RefreshCw size={15} /> Rebuild plan
+        </Button>
+        <ButtonLink href={insightsHref} variant="secondary">
+          {app.company} insights <ArrowUpRight size={15} />
+        </ButtonLink>
+        <Link href={`/experiences?company=${app.company_slug}`} className="inline-flex h-10 items-center px-2 text-sm font-medium text-muted hover:text-text">
+          All {app.company} experiences
+        </Link>
       </div>
     </div>
   );

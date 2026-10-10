@@ -102,7 +102,7 @@ def test_reads_job_posting_from_json_ld():
     opener = mock.Mock()
     opener.open.return_value = FakeResponse(page)
     with mock.patch("socket.getaddrinfo", return_value=PUBLIC_DNS), \
-         mock.patch("urllib.request.build_opener", return_value=opener):
+         mock.patch("matching.jobpage.build_safe_opener", return_value=opener):
         job = jobpage.fetch_job_page("https://jobs.example.com/123")
     assert job["title"] == "Frontend Engineer" and job["company"] == "Acme"
     assert "TypeScript" in job["text"] and "<b>" not in job["text"]
@@ -114,7 +114,7 @@ def test_unreadable_job_page_asks_to_paste(client):
     opener = mock.Mock()
     opener.open.return_value = FakeResponse("<html><body>Please sign in</body></html>")
     with mock.patch("socket.getaddrinfo", return_value=PUBLIC_DNS), \
-         mock.patch("urllib.request.build_opener", return_value=opener):
+         mock.patch("matching.jobpage.build_safe_opener", return_value=opener):
         res = client.post("/api/resume/check/", {"job_url": "https://www.linkedin.com/jobs/view/1"}, format="json")
     assert res.status_code == 400 and "paste" in res.data["detail"].lower()
 

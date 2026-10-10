@@ -23,6 +23,7 @@ export type Application = {
   missing_skills: string[];
   match_summary: string;
   match_source: "" | "ai" | "basic";
+  created_at?: string;
   updated_at?: string;
 };
 
@@ -94,14 +95,15 @@ export type Page<T> = {
 
 export type TopicCount = { topic: string; label: string; count: number };
 
-// Kanban columns, in order, with their accent color.
-export const COLUMNS: { status: Status; label: string; color: string }[] = [
-  { status: "APPLIED", label: "Applied", color: "#3b82f6" },
-  { status: "HR_REPLIED", label: "HR Replied", color: "#f59e0b" },
-  { status: "INTERVIEW", label: "Interview", color: "#8b5cf6" },
-  { status: "OFFER", label: "Offer", color: "#10b981" },
-  { status: "REJECTED", label: "Rejected", color: "#f43f5e" },
+export const COLUMNS: { status: Status; label: string; color: string; empty: string }[] = [
+  { status: "APPLIED", label: "Applied", color: "var(--stage-applied)", empty: "Jobs you've applied to" },
+  { status: "HR_REPLIED", label: "HR replied", color: "var(--stage-replied)", empty: "Move cards here when HR responds" },
+  { status: "INTERVIEW", label: "Interview", color: "var(--stage-interview)", empty: "Scheduled interviews get a prep plan" },
+  { status: "OFFER", label: "Offer", color: "var(--stage-offer)", empty: "Where every search should end" },
+  { status: "REJECTED", label: "Closed", color: "var(--stage-rejected)", empty: "Rejected or withdrawn" },
 ];
+
+export const stageOf = (status: Status) => COLUMNS.find((c) => c.status === status)!;
 
 export const TOPICS = [
   { value: "JAVASCRIPT", label: "JavaScript" },

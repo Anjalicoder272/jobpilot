@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api, post } from "./api";
 import type { User } from "./types";
 
@@ -18,7 +19,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // On first load, ask the server who is logged in (the cookie decides).
   useEffect(() => {
     api<User>("/api/auth/me/")
       .then(setUser)
@@ -26,18 +26,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const value: AuthState = {
-    user,
-    loading,
-    login: async (email, password) => setUser(await post<User>("/api/auth/login/", { email, password })),
-    signup: async (name, email, password) =>
-      setUser(await post<User>("/api/auth/signup/", { name, email, password })),
-    logout: async () => {
-      await post("/api/auth/logout/");
-      setUser(null);
-    },
-  };
+  const login = useCallback(async (email: string, password: string) => {
+    setUser(await post<User>("/api/auth/login/", { email, password }));
+  }, []);
+  const signup = useCallback(async (name: string, email: string, password: string) => {
+    setUser(await post<User>("/api/auth/signup/", { name, email, password }));
+  }, []);
+  const logout = useCallback(async () => {
+    await post("/api/auth/logout/").catch(() => {});
+    setUser(null);
+  }, []);
 
+  const value = useMemo(() => ({ user, loading, login, signup, logout }), [user, loading, login, signup, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
@@ -45,4 +45,18 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
   return ctx;
+}
+
+/** For signed-in-only pages: sends guests to login and brings them back here afterwards. */
+export function useRequireAuth() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  useEffect(() => {
+    if (!loading && !user) {
+      const next = typeof window !== "undefined" ? pathname + window.location.search : pathname;
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+    }
+  }, [loading, user, router, pathname]);
+  return { user, ready: !loading && !!user };
 }

@@ -1,12 +1,15 @@
+import os
+import re
+
 from django.conf import settings
 from django.utils import timezone
-from pypdf.errors import PdfReadError
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes, throttle_classes
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+
+from config.throttles import AIThrottle
 
 from accounts.models import Profile
 
@@ -42,13 +45,13 @@ def resume(request):
             return Response({"detail": "The file is larger than 2 MB."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             text = services.extract_pdf_text(upload)
-        except (PdfReadError, ValueError):
+        except ValueError:
             return Response({"detail": "This PDF couldn't be read. Try exporting it again."},
                             status=status.HTTP_400_BAD_REQUEST)
         if len(text) < 100:
             return Response({"detail": "No text found in this PDF. Scanned images can't be read; "
                                        "please upload a text-based PDF."}, status=status.HTTP_400_BAD_REQUEST)
-        profile.resume_filename = upload.name[:200]
+        profile.resume_filename = re.sub(r"[^\w .()-]", "_", os.path.basename(upload.name))[:200]
         profile.resume_text = text
         profile.skills = extract_skills(text)
         profile.resume_uploaded_at = timezone.now()
@@ -80,7 +83,7 @@ def ai_status(request):
 
 
 @api_view(["POST"])
-@throttle_classes([ScopedRateThrottle])
+@throttle_classes([AIThrottle])
 def match_application(request, pk):
     """Compare the user's resume with one application's job description and store the result."""
     from applications.models import Application
@@ -110,7 +113,7 @@ match_application.cls.throttle_scope = "ai"
 
 
 @api_view(["POST"])
-@throttle_classes([ScopedRateThrottle])
+@throttle_classes([AIThrottle])
 def email_draft(request, pk):
     """Draft a cold email for one application, using only facts from the user's resume. Nothing is sent."""
     from applications.models import Application
@@ -138,7 +141,7 @@ email_draft.cls.throttle_scope = "ai"
 
 
 @api_view(["GET", "POST"])
-@throttle_classes([ScopedRateThrottle])
+@throttle_classes([AIThrottle])
 def prep_plan(request, pk):
     """GET: the saved plan (or null) · POST: generate a new "Prepare me" plan for this application."""
     from django.utils import timezone
@@ -158,16 +161,18 @@ def prep_plan(request, pk):
 
 
 prep_plan.cls.throttle_scope = "ai"
+prep_plan.cls.throttle_reads = False
 
 
 @api_view(["GET", "POST"])
-@throttle_classes([ScopedRateThrottle])
+@throttle_classes([AIThrottle])
 def company_insights(request):
     """GET ?company=Amazon&role=SDE-1 → insights (cached for 7 days). POST {company, role} → refresh."""
     from .insights import get_insights, insight_payload
 
     source = request.data if request.method == "POST" else request.query_params
-    company, role = str(source.get("company", "")).strip(), str(source.get("role", "")).strip()
+    company = " ".join(str(source.get("company", "")).split())[:120]
+    role = " ".join(str(source.get("role", "")).split())[:150]
     if len(company) < 2 or len(role) < 2:
         return Response({"detail": "Enter a company and a job title."}, status=status.HTTP_400_BAD_REQUEST)
     refresh = request.method == "POST"
@@ -179,7 +184,7 @@ company_insights.cls.throttle_scope = "ai"
 
 
 @api_view(["POST"])
-@throttle_classes([ScopedRateThrottle])
+@throttle_classes([AIThrottle])
 def resume_check(request):
     """Check the user's resume against a job link or pasted description. Nothing is saved."""
     from .jobpage import fetch_job_page
@@ -188,8 +193,8 @@ def resume_check(request):
     if not profile.resume_text:
         return Response({"detail": "Upload your resume first."}, status=status.HTTP_400_BAD_REQUEST)
 
-    job_url = str(request.data.get("job_url", "")).strip()
-    jd_text = str(request.data.get("jd_text", "")).strip()
+    job_url = str(request.data.get("job_url", "")).strip()[:2000]
+    jd_text = str(request.data.get("jd_text", "")).strip()[:20_000]
     page = {"title": "", "company": ""}
     if not jd_text and job_url:
         try:

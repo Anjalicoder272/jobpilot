@@ -101,7 +101,7 @@ def _web_insights(company: str, role: str) -> tuple[dict, list[dict]]:
     sources, seen = [], set()
     for chunk in candidate.get("groundingMetadata", {}).get("groundingChunks", []):
         web = chunk.get("web", {})
-        if web.get("uri") and web.get("title") not in seen:
+        if str(web.get("uri", "")).startswith("https://") and web.get("title") not in seen:
             seen.add(web.get("title"))
             sources.append({"title": web.get("title") or "Source", "url": web["uri"]})
     return _clean(_parse_json(text)), sources[:8]

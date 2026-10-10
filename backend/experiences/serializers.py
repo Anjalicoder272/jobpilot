@@ -6,6 +6,8 @@ from applications.models import Company
 from .ai import moderate, redact_personal_info
 from .models import Experience, Question
 
+MAX_QUESTIONS = 30
+
 
 class QuestionSerializer(serializers.ModelSerializer):
     topic_label = serializers.CharField(source="get_topic_display", read_only=True)
@@ -16,6 +18,13 @@ class QuestionSerializer(serializers.ModelSerializer):
         model = Question
         fields = ["id", "text", "topic", "topic_label", "difficulty", "votes", "voted"]
         read_only_fields = ["votes", "voted"]
+        extra_kwargs = {"text": {"max_length": 500}}
+
+    def validate_text(self, value):
+        value = " ".join(value.split())
+        if len(value) < 5:
+            raise serializers.ValidationError("Write the full question.")
+        return value
 
     def get_votes(self, obj):
         # Annotated in the view's queryset; newly created questions have 0.
@@ -41,15 +50,33 @@ class ExperienceSerializer(serializers.ModelSerializer):
             "is_published", "moderation_note",
         ]
         read_only_fields = ["is_published", "moderation_note"]
+        extra_kwargs = {
+            "role": {"max_length": 150},
+            "summary": {"max_length": 10_000},
+            "rounds": {"min_value": 1, "max_value": 20},
+        }
 
     def get_author(self, obj):
-        # Show only the first name to protect the author's privacy.
-        return obj.user.first_name or "Anonymous"
+        # first_name holds the full name typed at signup; only the first word is ever public.
+        return (obj.user.first_name.split() or ["Anonymous"])[0]
+
+    def validate_company(self, value):
+        value = Company.clean_name(value)
+        if not any(ch.isalnum() for ch in value):
+            raise serializers.ValidationError("Enter a company name.")
+        return value
 
     def validate_questions(self, value):
         if not value:
             raise serializers.ValidationError("Add at least one question you were asked.")
-        return value
+        if len(value) > MAX_QUESTIONS:
+            raise serializers.ValidationError(f"Add at most {MAX_QUESTIONS} questions.")
+        seen, unique = set(), []
+        for q in value:
+            if q["text"].lower() not in seen:
+                seen.add(q["text"].lower())
+                unique.append(q)
+        return unique
 
     @transaction.atomic
     def create(self, validated_data):

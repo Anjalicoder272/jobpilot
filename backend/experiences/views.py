@@ -1,9 +1,12 @@
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import CursorPagination
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+
+from config.throttles import AIThrottle, SmartSearchThrottle
 
 from matching.embeddings import cosine, embed_texts, embeddings_enabled
 
@@ -11,6 +14,10 @@ from .ai import extract_questions
 
 from .models import Experience, Question, QuestionVote
 from .serializers import ExperienceSerializer
+
+
+MAX_SEARCH = 200
+SMART_SEARCH_POOL = 2000
 
 
 class ExperiencePagination(CursorPagination):
@@ -31,6 +38,11 @@ class ExperienceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
     pagination_class = ExperiencePagination
     throttle_scope = None  # set to "ai" on the extract action (rate-limited AI calls)
 
+    def get_throttles(self):
+        if self.action == "list":
+            return [AnonRateThrottle(), UserRateThrottle(), SmartSearchThrottle()]
+        return super().get_throttles()
+
     def get_permissions(self):
         # Anyone can read experiences; only logged-in users can share one.
         if self.action in ("list", "retrieve", "topics"):
@@ -50,7 +62,7 @@ class ExperienceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
             qs = qs.filter(result=params["result"])
         if params.get("topic"):
             qs = qs.filter(questions__topic=params["topic"])
-        search = params.get("search", "").strip()
+        search = params.get("search", "").strip()[:MAX_SEARCH]
         if search:
             qs = qs.filter(Q(role__icontains=search) | Q(company__name__icontains=search)
                            | Q(summary__icontains=search) | Q(questions__text__icontains=search))
@@ -73,7 +85,7 @@ class ExperienceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
         if not embeddings_enabled():
             return Response({"detail": "Smart search needs a Gemini key."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            query_vector = embed_texts([request.query_params["search"].strip()], task="RETRIEVAL_QUERY")[0]
+            query_vector = embed_texts([request.query_params["search"].strip()[:MAX_SEARCH]], task="RETRIEVAL_QUERY")[0]
         except Exception:
             return Response({"detail": "Smart search is unavailable right now. Try normal search."},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -81,7 +93,7 @@ class ExperienceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
         params = request.query_params.copy()
         params.pop("search")  # the meaning match replaces the keyword filter
         self.request._request.GET = params
-        candidates = self.get_queryset()
+        candidates = self.get_queryset()[:SMART_SEARCH_POOL]
 
         # Score every question, then keep only clear matches: close to the best one and well above average.
         rows = [(cosine(query_vector, q.embedding), q.id, exp)
@@ -105,12 +117,14 @@ class ExperienceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @action(detail=False, methods=["post"], throttle_classes=[ScopedRateThrottle], throttle_scope="ai")
+    @action(detail=False, methods=["post"], throttle_classes=[AIThrottle], throttle_scope="ai")
     def extract(self, request):
         """Turn free-form interview notes into a list of tagged questions (nothing is saved)."""
         notes = str(request.data.get("notes", "")).strip()
         if len(notes) < 20:
             return Response({"detail": "Paste a few lines of your interview notes first."}, status=400)
+        if len(notes) > 10_000:
+            return Response({"detail": "Notes are too long. Paste up to 10,000 characters."}, status=400)
         return Response(extract_questions(notes))
 
     @action(detail=False, methods=["get"])
@@ -131,7 +145,13 @@ class QuestionVoteView(viewsets.ViewSet):
         question = Question.objects.filter(pk=pk, experience__is_published=True).first()
         if question is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        vote, created = QuestionVote.objects.get_or_create(user=request.user, question=question)
-        if not created:
-            vote.delete()
+        deleted, _ = QuestionVote.objects.filter(user=request.user, question=question).delete()
+        created = False
+        if not deleted:
+            try:
+                with transaction.atomic():
+                    QuestionVote.objects.create(user=request.user, question=question)
+                created = True
+            except IntegrityError:  # a double click raced us; the vote exists, which is what was asked
+                created = True
         return Response({"votes": question.votes.count(), "voted": created})

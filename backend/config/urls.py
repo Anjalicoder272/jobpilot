@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path
@@ -18,7 +19,7 @@ def health(request):
 
 urlpatterns = [
     path("api/health/", health),
-    path("admin/", admin.site.urls),
+    path(settings.ADMIN_URL, admin.site.urls),
     path("api/auth/", include("accounts.urls")),
     path("api/questions/<int:pk>/vote/", QuestionVoteView.as_view({"post": "vote"})),
     path("api/", include("matching.urls")),

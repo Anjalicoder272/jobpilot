@@ -24,7 +24,8 @@ load_env_file(BASE_DIR / ".env")
 # Read secrets from environment variables; the fallbacks are only for local development.
 DEV_SECRET_KEY = "dev-only-insecure-key-please-change-in-production"
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", DEV_SECRET_KEY)
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+# Off by default on Render, so a missing env var can't expose debug pages.
+DEBUG = os.environ.get("DJANGO_DEBUG", "0" if os.environ.get("RENDER") else "1") == "1"
 if not DEBUG and SECRET_KEY == DEV_SECRET_KEY:
     raise RuntimeError("Set DJANGO_SECRET_KEY in production.")
 
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "django_filters",
     "accounts",
     "applications",
@@ -51,10 +53,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "config.middleware.SecurityHeadersMiddleware",
+    "config.middleware.RequestSizeMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",  # serves admin CSS/JS in production
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "config.middleware.APICSRFMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -114,8 +119,16 @@ if not DEBUG:
     SECURE_REDIRECT_EXEMPT = [r"^api/health/$"]  # Render's internal health check uses plain HTTP
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30
-    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+
+# Safe in every environment.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
+SESSION_COOKIE_HTTPONLY = True
+ADMIN_URL = os.environ.get("DJANGO_ADMIN_URL", "admin/").strip("/") + "/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
@@ -128,12 +141,22 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
     ],
-    "DEFAULT_THROTTLE_RATES": {"anon": "60/min", "user": "600/min", "ai": "40/hour"},
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+        "user": "600/min",
+        "ai": "40/hour",
+        "login": "10/min",
+        "login_email": "20/hour",
+        "signup": "10/hour",
+        "smart_search": "30/hour",
+    },
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    # No rotation: two tabs refreshing at once would log each other out. Logout blacklists instead.
+    "UPDATE_LAST_LOGIN": True,
 }
 
 # Cookie settings for the JWT. The Next.js dev server proxies /api to Django,
@@ -168,5 +191,14 @@ else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "JobPilot <noreply@jobpilot.local>")
 
-# Resume uploads: max 2 MB.
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2_621_440
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2_621_440
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 200
+MAX_REQUEST_BYTES = 3 * 1024 * 1024
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "INFO" if not DEBUG else "WARNING"},
+}

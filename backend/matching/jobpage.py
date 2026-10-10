@@ -6,42 +6,119 @@ only http/https, no private/local/reserved IP addresses (checked again on every 
 timeout and a 2 MB size limit. Many sites (e.g. LinkedIn) block automatic reading; then we ask the user to paste.
 """
 import html
+import http.client
 import ipaddress
 import json
 import re
 import socket
+import time
 import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 
 MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT = 10
+TOTAL_DEADLINE = 15
+ALLOWED_PORTS = {80, 443, 8080, 8443}
 
 
 class UnsafeURL(ValueError):
     pass
 
 
+def _is_public(address: str) -> bool:
+    ip = ipaddress.ip_address(address.split("%")[0])
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_global and not ip.is_multicast
+
+
 def check_url_is_public(url: str) -> None:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise UnsafeURL("Use a normal http(s) job link.")
+    if parsed.username or parsed.password:
+        raise UnsafeURL("That address isn't allowed.")
     try:
-        infos = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
-    except socket.gaierror:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError:
+        raise UnsafeURL("That address isn't allowed.")
+    if port not in ALLOWED_PORTS:
+        raise UnsafeURL("That address isn't allowed.")
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, port)
+    except (socket.gaierror, UnicodeError):
         raise UnsafeURL("That website couldn't be found.")
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
-            raise UnsafeURL("That address isn't allowed.")
+    if not infos or not all(_is_public(info[4][0]) for info in infos):
+        raise UnsafeURL("That address isn't allowed.")
+
+
+def _verify_peer(sock) -> None:
+    # DNS can answer differently between our check and the real connect (DNS rebinding),
+    # so the address actually connected to is checked too.
+    if not _is_public(sock.getpeername()[0]):
+        sock.close()
+        raise UnsafeURL("That address isn't allowed.")
+
+
+class _SafeHTTPConnection(http.client.HTTPConnection):
+    def connect(self):
+        super().connect()
+        _verify_peer(self.sock)
+
+
+class _SafeHTTPSConnection(http.client.HTTPSConnection):
+    def connect(self):
+        super().connect()
+        _verify_peer(self.sock)
+
+
+class _SafeHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_SafeHTTPConnection, req)
+
+
+class _SafeHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_SafeHTTPSConnection, req, context=self._context)
 
 
 class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Re-check every redirect target, so a public URL can't bounce us to an internal address."""
+    max_redirections = 5
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         check_url_is_public(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def build_safe_opener():
+    # Built by hand rather than with build_opener(), which would add proxy support from env vars.
+    opener = urllib.request.OpenerDirector()
+    for handler in (_SafeHTTPHandler(), _SafeHTTPSHandler(), SafeRedirectHandler(),
+                    urllib.request.HTTPErrorProcessor(), urllib.request.HTTPDefaultErrorHandler()):
+        opener.add_handler(handler)
+    return opener
+
+
+def _read_limited(response) -> bytes:
+    """Read at most MAX_BYTES, and give up after TOTAL_DEADLINE even if the server trickles data."""
+    started, chunks, size = time.monotonic(), [], 0
+    while size < MAX_BYTES:
+        if time.monotonic() - started > TOTAL_DEADLINE:
+            raise ValueError("That page took too long to load. Paste the job description instead.")
+        chunk = response.read(min(64 * 1024, MAX_BYTES - size))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        size += len(chunk)
+    return b"".join(chunks)
+
+
+def _decode(raw: bytes, charset: str | None) -> str:
+    try:
+        return raw.decode(charset or "utf-8", errors="replace")
+    except LookupError:
+        return raw.decode("utf-8", errors="replace")
 
 
 class _TextExtractor(HTMLParser):
@@ -120,8 +197,10 @@ def split_title(page_title: str) -> tuple[str, str]:
 
 def fetch_job_page(url: str) -> dict:
     """Return {"text", "title", "company"} for a job link, or raise ValueError with a friendly message."""
+    if len(url) > 2000:
+        raise UnsafeURL("That link is too long.")
     check_url_is_public(url)
-    opener = urllib.request.build_opener(SafeRedirectHandler)
+    opener = build_safe_opener()
     request = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (JobPilot job-description reader)",
         "Accept": "text/html,application/xhtml+xml",
@@ -130,8 +209,8 @@ def fetch_job_page(url: str) -> dict:
         with opener.open(request, timeout=TIMEOUT) as response:
             if "html" not in response.headers.get("Content-Type", "text/html"):
                 raise ValueError("That link isn't a web page.")
-            raw = response.read(MAX_BYTES + 1)[:MAX_BYTES]
-            charset = response.headers.get_content_charset() or "utf-8"
+            raw = _read_limited(response)
+            charset = response.headers.get_content_charset()
     except UnsafeURL:
         raise
     except ValueError:
@@ -140,7 +219,7 @@ def fetch_job_page(url: str) -> dict:
         raise ValueError("Couldn't open that link. Paste the job description instead.")
 
     parser = _TextExtractor()
-    parser.feed(raw.decode(charset, errors="replace"))
+    parser.feed(_decode(raw, charset))
     posting = _find_job_posting(parser.json_ld)
     if posting and posting.get("description"):
         org = posting.get("hiringOrganization") or {}

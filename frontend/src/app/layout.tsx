@@ -1,36 +1,52 @@
-import type { Metadata } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
-import Footer from "@/components/Footer";
-import KeyboardFocus from "@/components/KeyboardFocus";
-import Navbar from "@/components/Navbar";
-import { AuthProvider } from "@/lib/auth";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { SITE } from "@/lib/site";
+import Providers from "./providers";
 import "./globals.css";
 
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
-const jakarta = Plus_Jakarta_Sans({ variable: "--font-jakarta", subsets: ["latin"], weight: ["600", "700", "800"] });
+const geist = Geist({ variable: "--font-geist", subsets: ["latin"], display: "swap" });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"], display: "swap" });
+const serif = Instrument_Serif({ variable: "--font-instrument", subsets: ["latin"], weight: "400", style: ["normal", "italic"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "JobPilot",
-  description: "Track every job application, match your resume to roles, and prepare with real interview experiences.",
+  metadataBase: new URL(SITE.url),
+  title: { default: SITE.title, template: `%s · ${SITE.name}` },
+  description: SITE.description,
+  applicationName: SITE.name,
+  keywords: ["job application tracker", "resume match", "interview experiences", "interview questions", "job search kanban", "developer jobs"],
+  alternates: { canonical: "/" },
+  openGraph: { type: "website", siteName: SITE.name, title: SITE.title, description: SITE.description, url: "/", locale: "en_IN" },
+  twitter: { card: "summary_large_image", title: SITE.title, description: SITE.description },
+  robots: { index: true, follow: true },
+  formatDetection: { telephone: false },
 };
 
-// Set the theme before the page paints, so there is no flash of the wrong theme.
-const themeScript = `(function(){try{var d=document.documentElement;var t=localStorage.getItem('theme');if(!t){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}d.dataset.theme=t}catch(e){}})();`;
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c0c0e" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+};
+
+// Runs before paint so a saved dark preference never flashes light. Light is the default.
+const themeScript = `try{if(localStorage.getItem('theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-theme="light" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable} ${serif.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className={`${inter.variable} ${jakarta.variable} flex min-h-screen flex-col antialiased`}>
-        <KeyboardFocus />
-        <AuthProvider>
-          <Navbar />
-          {/* flex-1 makes the content fill the empty space, so the footer always stays at the bottom */}
-          <main className="flex-1">{children}</main>
-          <Footer />
-        </AuthProvider>
+      <body className="min-h-dvh antialiased">
+        <a
+          href="#main"
+          className="sr-only z-[70] rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+        >
+          Skip to content
+        </a>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

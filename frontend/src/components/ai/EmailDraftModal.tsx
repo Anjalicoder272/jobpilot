@@ -2,18 +2,22 @@
 
 import { Check, Copy, ExternalLink, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { post } from "@/lib/api";
+import { Button, buttonClass } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
+import { Field, FormError, Input, Textarea } from "@/components/ui/Field";
+import { Skeleton } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/Toast";
+import { errorMessage, post } from "@/lib/api";
 import type { Application, EmailDraft } from "@/lib/types";
-import Modal from "../board/Modal";
-import { Field, inputClass } from "../ui/Field";
 import { SourceBadge } from "./AIBadge";
 
-/** Generates an email draft the user can edit, copy, or open in Gmail. JobPilot never sends it itself. */
-export default function EmailDraftModal({ app, onClose }: { app: Application; onClose: () => void }) {
+/** Drafts an email the user edits and sends from their own inbox. JobPilot never sends it. */
+export default function EmailDraftModal({ app, open, onClose }: { app: Application; open: boolean; onClose: () => void }) {
   const [draft, setDraft] = useState<EmailDraft | null>(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const toast = useToast();
 
   const generate = useCallback(async () => {
     setLoading(true);
@@ -21,73 +25,86 @@ export default function EmailDraftModal({ app, onClose }: { app: Application; on
     try {
       setDraft(await post<EmailDraft>(`/api/applications/${app.id}/email/`));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't write the email");
+      setError(errorMessage(e, "Couldn't write the email."));
     } finally {
       setLoading(false);
     }
   }, [app.id]);
 
   useEffect(() => {
-    generate();
-  }, [generate]);
+    if (open && !draft) generate();
+  }, [open, draft, generate]);
 
   async function copyAll() {
     if (!draft) return;
-    await navigator.clipboard.writeText(`Subject: ${draft.subject}\n\n${draft.body}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(`Subject: ${draft.subject}\n\n${draft.body}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+      toast({ title: "Email copied" });
+    } catch {
+      toast({ title: "Couldn't copy", description: "Select the text and copy it manually.", tone: "error" });
+    }
   }
 
   const gmailUrl = draft
     ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(draft.to)}&su=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`
-    : "#";
+    : undefined;
 
   return (
-    <Modal title={`Email for ${app.company}`} onClose={onClose}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={`Email to ${app.company}`}
+      description="Written only from facts in your resume. Edit freely, then send from your own inbox."
+      size="lg"
+      footer={
+        draft && !loading ? (
+          <>
+            <Button variant="ghost" onClick={generate} className="mr-auto">
+              <RefreshCw size={15} /> Rewrite
+            </Button>
+            <Button variant="secondary" onClick={copyAll}>
+              {copied ? <Check size={15} className="text-success" /> : <Copy size={15} />} {copied ? "Copied" : "Copy"}
+            </Button>
+            <a href={gmailUrl} target="_blank" rel="noopener noreferrer" className={buttonClass()}>
+              Open in Gmail <ExternalLink size={14} />
+            </a>
+          </>
+        ) : undefined
+      }
+    >
       {loading ? (
-        <div className="space-y-3">
-          <div className="skeleton h-10" />
-          <div className="skeleton h-64" />
-          <p className="text-center text-sm text-muted">Writing your email from your resume…</p>
+        <div className="space-y-4" aria-busy aria-label="Writing your email">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-10" />
+          <Skeleton className="h-56" />
         </div>
       ) : error ? (
-        <p role="alert" className="text-sm text-[#e11d48]">{error}</p>
+        <div className="space-y-4">
+          <FormError message={error} />
+          <Button variant="secondary" onClick={generate}>
+            Try again
+          </Button>
+        </div>
       ) : (
         draft && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">To: {draft.to || "add the HR email on the card"}</span>
+          <div className="animate-fade-up space-y-4">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="truncate text-muted">
+                To: {draft.to || <span className="text-warning">add the HR email in the details tab</span>}
+              </span>
               <SourceBadge source={draft.source} />
             </div>
             <Field label="Subject">
-              <input className={inputClass} value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} />
+              <Input value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} />
             </Field>
-            <Field label="Message" hint="Edit anything you like. Add your resume link before sending.">
-              <textarea
-                className={`${inputClass} min-h-72 leading-relaxed`}
-                value={draft.body}
-                onChange={(e) => setDraft({ ...draft, body: e.target.value })}
-              />
+            <Field label="Message" hint="Add your resume link before sending.">
+              <Textarea rows={12} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
             </Field>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={gmailUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="press bg-gradient-brand inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-card"
-              >
-                <ExternalLink size={16} /> Open in Gmail
-              </a>
-              <button onClick={copyAll} className="press inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-semibold">
-                {copied ? <Check size={16} className="text-[#10b981]" /> : <Copy size={16} />} {copied ? "Copied" : "Copy"}
-              </button>
-              <button onClick={generate} className="press inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-semibold">
-                <RefreshCw size={16} /> Rewrite
-              </button>
-            </div>
           </div>
         )
       )}
-    </Modal>
+    </Dialog>
   );
 }
