@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Gauge, Mail } from "lucide-react";
+import { FileText, Gauge } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -17,12 +17,10 @@ import SkillList from "./SkillList";
 export default function MatchPanel({
   app,
   onUpdated,
-  onWriteEmail,
   onEditDetails,
 }: {
   app: Application;
   onUpdated: (app: Application) => void;
-  onWriteEmail: () => void;
   onEditDetails: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -100,9 +98,6 @@ export default function MatchPanel({
       <div className="flex flex-wrap gap-2">
         <Button variant={hasResult ? "secondary" : "primary"} onClick={check} loading={busy}>
           <Gauge size={15} /> {hasResult ? "Check again" : "Check match"}
-        </Button>
-        <Button variant="secondary" onClick={onWriteEmail}>
-          <Mail size={15} /> Draft email to HR
         </Button>
       </div>
     </div>

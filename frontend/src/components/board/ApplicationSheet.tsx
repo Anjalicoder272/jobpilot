@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, ExternalLink, Trash2 } from "lucide-react";
+import { BellRing, ExternalLink, Mail, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import EmailDraftModal from "@/components/ai/EmailDraftModal";
 import MatchPanel from "@/components/ai/MatchPanel";
@@ -81,6 +81,9 @@ export default function ApplicationSheet({
             options={COLUMNS.map((c) => ({ value: c.status, label: c.label, dot: c.color }))}
             className="h-9 w-44"
           />
+          <Button variant="secondary" size="sm" className="h-9" onClick={() => setEmailOpen(true)}>
+            <Mail size={14} /> Email HR
+          </Button>
           {jobLink && (
             <a href={jobLink} target="_blank" rel="noopener noreferrer" className={buttonClass({ variant: "secondary", size: "sm", className: "h-9" })}>
               Job post <ExternalLink size={13} />
@@ -111,7 +114,7 @@ export default function ApplicationSheet({
             <JobForm key={`${shown.id}-${shown.updated_at}`} initial={shown} submitLabel="Save changes" onSubmit={(v) => onSave(shown, v)} />
           )}
           {tab === "match" && (
-            <MatchPanel app={shown} onUpdated={onUpdated} onWriteEmail={() => setEmailOpen(true)} onEditDetails={() => setTab("details")} />
+            <MatchPanel app={shown} onUpdated={onUpdated} onEditDetails={() => setTab("details")} />
           )}
           {tab === "prep" && preparing && <PrepPanel app={shown} />}
         </div>
