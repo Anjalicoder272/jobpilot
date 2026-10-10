@@ -75,7 +75,7 @@ def normalise_results(raw: list[dict], company: str) -> list[dict]:
         url, title = str(item.get("url", "")), str(item.get("title", "")).strip()
         site = _site_label(url)
         haystack = f"{title} {item.get('content', '')}".lower()
-        if not site or not title or url in seen:
+        if not site or not title or url in seen or not url.startswith("https://"):
             continue
         if company_words and not all(w in haystack for w in company_words):
             continue  # off-topic result (a different company)

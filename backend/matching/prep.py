@@ -13,7 +13,7 @@ from django.db.models import Count, Q
 from experiences.ai import guess_topic
 from experiences.models import Question
 
-from .services import _ask_ai, ai_enabled
+from .services import UNTRUSTED, _ask_ai, ai_enabled
 from .skills import extract_skills
 
 log = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ def ai_plan(company: str, role: str, questions: list[dict], jd_text: str, resume
     asked = "\n".join(f"- [{TOPIC_LABELS.get(q['topic'], 'Other')}] {q['text']}" for q in questions) or "(none shared yet)"
     reported = "\n".join(f"- {t}" for t in (extra or [])) or "(none)"
     system = ("You are an interview coach. Return ONLY JSON. Use the real questions provided; never claim "
-              "a question was asked at the company unless it is in the provided list.")
+              "a question was asked at the company unless it is in the provided list. " + UNTRUSTED)
     prompt = f"""The candidate has an interview for "{role}" at {company}.
 
 Questions real candidates were asked at {company}:

@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -14,18 +14,41 @@ class Company(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.name)
+            self.slug = self.unique_slug(self.name)
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
 
+    @staticmethod
+    def clean_name(name: str) -> str:
+        return " ".join(str(name).split())[:120]
+
+    @classmethod
+    def unique_slug(cls, name: str) -> str:
+        """ "OLX" and "O.L.X" both slugify to "olx", and "!!!" to "", so add a numeric suffix when taken."""
+        base = slugify(name)[:120] or "company"
+        slug, n = base, 2
+        while cls.objects.filter(slug=slug).exists():
+            slug, n = f"{base}-{n}", n + 1
+        return slug
+
     @classmethod
     def get_or_create_by_name(cls, name):
-        """Find a company case-insensitively, or create it."""
-        name = name.strip()
+        """Find a company case-insensitively, or create it. Safe when two requests create it at once."""
+        name = cls.clean_name(name)
         company = cls.objects.filter(name__iexact=name).first()
-        return company or cls.objects.create(name=name)
+        if company:
+            return company
+        try:
+            with transaction.atomic():
+                return cls.objects.create(name=name)
+        except IntegrityError:  # another request created it (or took the slug) in the meantime
+            company = cls.objects.filter(name__iexact=name).first()
+            if company:
+                return company
+            with transaction.atomic():
+                return cls.objects.create(name=name, slug=cls.unique_slug(name))
 
 
 class Application(models.Model):

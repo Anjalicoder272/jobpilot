@@ -1,52 +1,68 @@
-import { CalendarDays, Check, Copy, Layers, Sparkles, ThumbsUp } from "lucide-react";
+"use client";
+
+import { Check, ChevronDown, Copy, Sparkles, ThumbsUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { memo, useState } from "react";
+import { Badge, CompanyAvatar } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/Toast";
 import { post } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { Experience, Question } from "@/lib/types";
-import { companyColor } from "../board/JobCard";
-import Spotlight from "../fx/Spotlight";
+import { cn } from "@/lib/utils";
 
-const RESULT_STYLE: Record<Experience["result"], { bg: string; fg: string }> = {
-  SELECTED: { bg: "#10b98122", fg: "#059669" },
-  REJECTED: { bg: "#f43f5e1f", fg: "#e11d48" },
-  PENDING: { bg: "#f59e0b22", fg: "#d97706" },
+const RESULT_TONE = { SELECTED: "success", REJECTED: "danger", PENDING: "warning" } as const;
+const DIFFICULTY = {
+  EASY: { label: "Easy", color: "var(--success)" },
+  MEDIUM: { label: "Medium", color: "var(--warning)" },
+  HARD: { label: "Hard", color: "var(--danger)" },
 };
-
-const DIFFICULTY_COLOR = { EASY: "#10b981", MEDIUM: "#f59e0b", HARD: "#f43f5e" };
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const toast = useToast();
   return (
     <button
       onClick={async () => {
-        await navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          toast({ title: "Couldn't copy", tone: "error" });
+        }
       }}
       aria-label={copied ? "Copied" : "Copy question"}
-      title={copied ? "Copied!" : "Copy question"}
-      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted opacity-0 transition hover:bg-surface hover:text-brand focus-visible:opacity-100 group-hover/q:opacity-100"
+      title={copied ? "Copied" : "Copy"}
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-subtle transition-all hover:bg-surface-3 hover:text-text focus-visible:opacity-100 sm:opacity-0 sm:group-hover/q:opacity-100"
     >
-      {copied ? <Check size={14} className="text-[#10b981]" /> : <Copy size={14} />}
+      {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
     </button>
   );
 }
 
-/** "I was asked this too": optimistic toggle, rolled back if the request fails. */
 function VoteButton({ question }: { question: Question }) {
   const { user } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   const [state, setState] = useState({ votes: question.votes, voted: question.voted });
+  const [pending, setPending] = useState(false);
 
   async function toggle() {
-    if (!user) return router.push("/login");
+    if (!user) {
+      router.push(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      return;
+    }
+    if (pending) return;
     const before = state;
+    setPending(true);
     setState({ votes: state.votes + (state.voted ? -1 : 1), voted: !state.voted });
     try {
       setState(await post<{ votes: number; voted: boolean }>(`/api/questions/${question.id}/vote/`));
     } catch {
       setState(before);
+      toast({ title: "Couldn't save your vote", tone: "error" });
+    } finally {
+      setPending(false);
     }
   }
 
@@ -54,12 +70,14 @@ function VoteButton({ question }: { question: Question }) {
     <button
       onClick={toggle}
       aria-pressed={state.voted}
-      title={state.voted ? "You were asked this too" : "I was asked this too"}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold transition hover:scale-105 ${
-        state.voted ? "bg-gradient-brand text-white" : "bg-surface text-muted hover:text-brand"
-      }`}
+      aria-label={`I was asked this too${state.votes ? `, ${state.votes} so far` : ""}`}
+      title="I was asked this too"
+      className={cn(
+        "tabular inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors",
+        state.voted ? "border-accent/30 bg-accent-soft text-accent-text" : "border-border text-subtle hover:border-border-strong hover:text-text",
+      )}
     >
-      <ThumbsUp size={12} className={state.voted ? "fill-current" : ""} />
+      <ThumbsUp size={13} className={cn("transition-transform duration-200", state.voted && "-rotate-12 fill-current")} />
       {state.votes > 0 && state.votes}
     </button>
   );
@@ -67,83 +85,69 @@ function VoteButton({ question }: { question: Question }) {
 
 function ExperienceCard({ exp, matchedIds }: { exp: Experience; matchedIds?: Set<number> }) {
   const [expanded, setExpanded] = useState(false);
-  const result = RESULT_STYLE[exp.result];
-  // In smart search, show matched questions first so the reason for the result is visible.
   const ordered = matchedIds?.size
     ? [...exp.questions].sort((a, b) => Number(matchedIds.has(b.id)) - Number(matchedIds.has(a.id)))
     : exp.questions;
   const questions = expanded ? ordered : ordered.slice(0, 3);
+  const date = exp.interviewed_on && new Date(exp.interviewed_on).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
 
   return (
-    <Spotlight as="article" className="rounded-3xl border border-border bg-surface p-6 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-pop">
-      <header className="flex flex-wrap items-start gap-3">
-        <span
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl font-display font-bold text-white"
-          style={{ background: companyColor(exp.company) }}
-        >
-          {exp.company.charAt(0)}
-        </span>
+    <article className="rounded-xl border border-border bg-surface p-5 shadow-xs transition-shadow duration-200 hover:shadow-sm sm:p-6">
+      <header className="flex items-start gap-3">
+        <CompanyAvatar name={exp.company} size={40} />
         <div className="min-w-0 flex-1">
-          <h3 className="font-display text-lg font-bold leading-tight">{exp.company}</h3>
-          <p className="text-sm text-muted">
+          <h3 className="text-[15px] font-semibold leading-tight">{exp.company}</h3>
+          <p className="mt-0.5 truncate text-sm text-muted">
             {exp.role} · {exp.level_label}
           </p>
         </div>
-        <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: result.bg, color: result.fg }}>
-          {exp.result_label}
-        </span>
+        <Badge tone={RESULT_TONE[exp.result]}>{exp.result_label}</Badge>
       </header>
 
-      <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
-        <span className="inline-flex items-center gap-1.5">
-          <Layers size={13} /> {exp.rounds} rounds
-        </span>
-        {exp.interviewed_on && (
-          <span className="inline-flex items-center gap-1.5">
-            <CalendarDays size={13} />
-            {new Date(exp.interviewed_on).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
-          </span>
-        )}
-        <span>Shared by {exp.author}</span>
-      </div>
+      <p className="mt-2 flex flex-wrap gap-x-2 text-xs text-subtle">
+        <span>{exp.rounds} round{exp.rounds === 1 ? "" : "s"}</span>
+        {date && <span>· {date}</span>}
+        <span>· by {exp.author}</span>
+      </p>
 
-      <p className="mt-4 text-sm leading-relaxed">{exp.summary}</p>
+      <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-text/90">{exp.summary}</p>
 
       <div className="mt-5">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">Questions asked</h4>
-        <ul className="mt-2 space-y-2">
-          {questions.map((q, i) => (
-            <li
-              key={q.id}
-              className={`group/q pop-in flex items-start gap-3 rounded-2xl px-4 py-3 transition hover:bg-brand-soft/60 ${
-                matchedIds?.has(q.id) ? "bg-brand-soft ring-1 ring-brand/30" : "bg-surface-2"
-              }`}
-              style={{ animationDelay: `${i * 60}ms` }}
-            >
-              <span
-                className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                style={{ background: DIFFICULTY_COLOR[q.difficulty] }}
-                title={q.difficulty.toLowerCase()}
-              />
-              <span className="flex-1 text-sm">
-                {matchedIds?.has(q.id) && <Sparkles size={13} className="mr-1.5 inline text-brand" aria-label="Best match" />}
-                {q.text}
-              </span>
-              <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand">
-                {q.topic_label}
-              </span>
-              <CopyButton text={q.text} />
-              <VoteButton question={q} />
-            </li>
-          ))}
+        <h4 className="text-xs font-medium uppercase tracking-wider text-subtle">Questions asked · {exp.questions.length}</h4>
+        <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+          {questions.map((q) => {
+            const hit = matchedIds?.has(q.id);
+            return (
+              <li key={q.id} className={cn("group/q flex items-start gap-3 px-3.5 py-2.5 transition-colors", hit ? "bg-accent-soft" : "hover:bg-surface-2/60")}>
+                <span
+                  className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: DIFFICULTY[q.difficulty].color }}
+                  title={DIFFICULTY[q.difficulty].label}
+                  aria-label={`${DIFFICULTY[q.difficulty].label} question`}
+                />
+                <span className="min-w-0 flex-1 pt-1 text-sm">
+                  {hit && <Sparkles size={13} className="mr-1.5 inline text-accent-text" aria-label="Best match" />}
+                  {q.text}
+                  <span className="ml-2 whitespace-nowrap text-xs text-subtle">{q.topic_label}</span>
+                </span>
+                <CopyButton text={q.text} />
+                <VoteButton question={q} />
+              </li>
+            );
+          })}
         </ul>
         {exp.questions.length > 3 && (
-          <button onClick={() => setExpanded(!expanded)} className="mt-2 text-sm font-semibold text-brand">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            className="mt-2 inline-flex h-8 items-center gap-1 rounded-md px-1 text-sm font-medium text-muted transition-colors hover:text-text"
+          >
             {expanded ? "Show less" : `Show all ${exp.questions.length} questions`}
+            <ChevronDown size={15} className={cn("transition-transform duration-200", expanded && "rotate-180")} />
           </button>
         )}
       </div>
-    </Spotlight>
+    </article>
   );
 }
 

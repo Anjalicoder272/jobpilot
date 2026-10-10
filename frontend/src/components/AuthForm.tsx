@@ -1,82 +1,161 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { Field, FormError, Input, PasswordInput } from "@/components/ui/Field";
+import { useToast } from "@/components/ui/Toast";
+import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { LogoMark } from "./Logo";
-import Reveal from "./Reveal";
-import { Field, PrimaryButton, inputClass } from "./ui/Field";
+import { atLeast, safeNext } from "@/lib/utils";
 
-export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
-  const { login, signup } = useAuth();
+type Mode = "login" | "signup";
+type Values = { name: string; email: string; password: string };
+type Errors = Partial<Record<keyof Values, string>>;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function validate(mode: Mode, v: Values): Errors {
+  const e: Errors = {};
+  if (mode === "signup" && !v.name.trim()) e.name = "Enter your name.";
+  if (!v.email.trim()) e.email = "Enter your email.";
+  else if (!EMAIL_RE.test(v.email.trim())) e.email = "Enter a valid email, like name@example.com.";
+  if (!v.password) e.password = "Enter your password.";
+  else if (mode === "signup" && v.password.length < 8) e.password = "Use at least 8 characters.";
+  return e;
+}
+
+export default function AuthForm({ mode }: { mode: Mode }) {
+  const { user, loading, login, signup } = useAuth();
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const params = useSearchParams();
+  const toast = useToast();
+  const next = safeNext(params.get("next"));
   const isSignup = mode === "signup";
+
+  const [values, setValues] = useState<Values>({ name: "", email: "", password: "" });
+  const [errors, setErrors] = useState<Errors>({});
+  const [formError, setFormError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (!loading && user && !busy) router.replace(next);
+  }, [loading, user, busy, next, router]);
+
+  function update(key: keyof Values) {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = { ...values, [key]: e.target.value };
+      setValues(v);
+      if (submitted) setErrors(validate(mode, v));
+      if (formError) setFormError("");
+    };
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    setSubmitted(true);
+    const found = validate(mode, values);
+    setErrors(found);
+    if (Object.keys(found).length) {
+      document.getElementById(`auth-${Object.keys(found)[0]}`)?.focus();
+      return;
+    }
     setBusy(true);
-    setError("");
+    setFormError("");
     try {
-      if (isSignup) await signup(form.name, form.email, form.password);
-      else await login(form.email, form.password);
-      router.push("/board");
+      const email = values.email.trim().toLowerCase();
+      await atLeast(isSignup ? signup(values.name.trim(), email, values.password) : login(email, values.password), 450);
+      toast({ title: isSignup ? "Welcome to JobPilot" : "Welcome back", description: isSignup ? "Your board is ready." : undefined });
+      router.replace(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
+      const fields = err instanceof ApiError ? err.fields : {};
+      if (Object.keys(fields).length) setErrors(fields);
+      else setFormError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setBusy(false);
     }
   }
 
   return (
-    <div className="relative grid min-h-[calc(100vh-4rem)] place-items-center overflow-hidden px-4 py-12">
-      <div className="blob float left-[10%] top-[10%] h-64 w-64 blob-1" />
-      <div className="blob float bottom-[5%] right-[10%] h-64 w-64 blob-2" style={{ animationDelay: "-3s" }} />
-      <Reveal className="relative w-full max-w-md">
-        <form onSubmit={submit} className="glow-border rounded-3xl border border-border bg-surface p-8 shadow-pop">
-          <div className="mb-5"><LogoMark size={44} /></div>
-          <h1 className="font-display text-2xl font-extrabold tracking-tight">
-            {isSignup ? "Create your board" : "Welcome back"}
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            {isSignup ? "Start tracking your applications in a minute." : "Log in to see your board."}
-          </p>
-          <div className="mt-6 space-y-4">
-            {isSignup && (
-              <Field label="Full name">
-                <input className={inputClass} required value={form.name} autoComplete="name"
-                  onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </Field>
-            )}
-            <Field label="Email">
-              <input className={inputClass} type="email" required value={form.email} autoComplete="email"
-                onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            </Field>
-            <Field label="Password" hint={isSignup ? "At least 8 characters." : undefined}>
-              <input className={inputClass} type="password" required minLength={8} value={form.password}
-                autoComplete={isSignup ? "new-password" : "current-password"}
-                onChange={(e) => setForm({ ...form, password: e.target.value })} />
-            </Field>
-          </div>
-          {error && (
-            <p role="alert" className="mt-4 rounded-xl bg-[#f43f5e]/10 px-3 py-2 text-sm text-[#e11d48]">
-              {error}
-            </p>
-          )}
-          <PrimaryButton type="submit" disabled={busy} className="mt-6 w-full py-3">
-            {busy ? "Please wait…" : isSignup ? "Create account" : "Log in"}
-          </PrimaryButton>
-          <p className="mt-5 text-center text-sm text-muted">
-            {isSignup ? "Already have an account? " : "New to JobPilot? "}
-            <Link href={isSignup ? "/login" : "/signup"} className="font-semibold text-brand">
-              {isSignup ? "Log in" : "Create one"}
-            </Link>
-          </p>
-        </form>
-      </Reveal>
+    <div className="mx-auto w-full max-w-[400px]">
+      <div className="animate-fade-up">
+        <h1 className="text-[26px] font-semibold tracking-tight">{isSignup ? "Create your account" : "Welcome back"}</h1>
+        <p className="mt-1.5 text-sm text-muted">
+          {isSignup ? "Free, and takes under a minute. No card needed." : "Log in to pick up where you left off."}
+        </p>
+      </div>
+
+      <form
+        onSubmit={submit}
+        noValidate
+        className="animate-fade-up mt-7 space-y-4 rounded-2xl border border-border bg-surface p-6 shadow-sm [animation-delay:60ms] sm:p-7"
+      >
+        {isSignup && (
+          <Field label="Full name" error={errors.name}>
+            <Input
+              id="auth-name"
+              value={values.name}
+              onChange={update("name")}
+              autoComplete="name"
+              placeholder="Aditya Dixit"
+              maxLength={80}
+              disabled={busy}
+            />
+          </Field>
+        )}
+        <Field label="Email" error={errors.email}>
+          <Input
+            id="auth-email"
+            type="email"
+            inputMode="email"
+            value={values.email}
+            onChange={update("email")}
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="you@example.com"
+            maxLength={254}
+            disabled={busy}
+          />
+        </Field>
+        <Field
+          label="Password"
+          error={errors.password}
+          hint={isSignup ? "At least 8 characters. Avoid your name or email." : undefined}
+        >
+          <PasswordInput
+            id="auth-password"
+            value={values.password}
+            onChange={update("password")}
+            autoComplete={isSignup ? "new-password" : "current-password"}
+            placeholder={isSignup ? "Create a password" : "Your password"}
+            maxLength={128}
+            disabled={busy}
+          />
+        </Field>
+
+        <FormError message={formError} />
+
+        <Button type="submit" size="lg" loading={busy} className="w-full">
+          {isSignup ? "Create account" : "Log in"}
+        </Button>
+      </form>
+
+      <p className="animate-fade-up mt-6 text-center text-sm text-muted [animation-delay:120ms]">
+        {isSignup ? "Already have an account?" : "New to JobPilot?"}{" "}
+        <Link
+          href={`${isSignup ? "/login" : "/signup"}${params.get("next") ? `?next=${encodeURIComponent(next)}` : ""}`}
+          className="font-medium text-text underline decoration-border-strong underline-offset-4 transition-colors hover:decoration-text"
+        >
+          {isSignup ? "Log in" : "Create an account"}
+        </Link>
+      </p>
+      {isSignup && (
+        <p className="mt-3 text-center text-xs text-subtle">
+          Your resume and applications are private to your account.
+        </p>
+      )}
     </div>
   );
 }

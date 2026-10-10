@@ -2,64 +2,73 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { Plus } from "lucide-react";
 import type { Application, Status } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import JobCard from "./JobCard";
 
 export default function Column({
   status,
   label,
   color,
+  empty,
   apps,
+  total,
   onOpen,
   onAdvance,
-  query,
+  onAdd,
+  filtering,
 }: {
   status: Status;
   label: string;
   color: string;
+  empty: string;
   apps: Application[];
+  total: number;
   onOpen: (app: Application) => void;
   onAdvance?: (app: Application) => void;
-  query: string;
+  onAdd?: () => void;
+  filtering: boolean;
 }) {
-  // The column itself is a drop target, so cards can be dropped into an empty column.
-  const { setNodeRef, isOver } = useDroppable({ id: status });
+  const { setNodeRef, isOver } = useDroppable({ id: status, disabled: filtering });
 
   return (
     <section
-      ref={setNodeRef}
-      aria-label={`${label} column`}
-      className={`flex min-w-[15.5rem] flex-1 flex-col rounded-3xl border p-3 transition-colors ${
-        isOver ? "pulse-ring border-brand/50 bg-brand-soft/50" : "border-transparent bg-surface-2"
-      }`}
+      aria-label={`${label}, ${total} applications`}
+      className="flex w-[82vw] max-w-[300px] shrink-0 snap-start flex-col sm:w-[272px] lg:w-auto lg:min-w-[220px] lg:max-w-none lg:flex-1"
     >
-      <span aria-hidden className="mx-1 mb-3 h-1 rounded-full" style={{ background: color, opacity: 0.6 }} />
-      <header className="mb-3 flex items-center gap-2 px-1">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
-        <h2 className="text-sm font-semibold">{label}</h2>
-        <span className="ml-auto rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-muted">
-          {apps.length}
-        </span>
+      <header className="mb-2 flex h-8 items-center gap-2 px-1">
+        <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+        <h2 className="text-[13px] font-medium">{label}</h2>
+        <span className="tabular text-[13px] text-subtle">{filtering ? `${apps.length}/${total}` : total}</span>
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            aria-label={`Add application to ${label}`}
+            className="ml-auto grid h-7 w-7 place-items-center rounded-md text-subtle transition-colors hover:bg-surface-3 hover:text-text pointer-coarse:h-9 pointer-coarse:w-9"
+          >
+            <Plus size={15} />
+          </button>
+        )}
       </header>
-      <SortableContext items={apps.map((a) => a.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex min-h-24 flex-1 flex-col gap-2.5">
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "flex min-h-[calc(100dvh-22rem)] flex-1 flex-col gap-2 rounded-xl p-1.5 transition-colors duration-150 lg:min-h-[420px]",
+          isOver ? "bg-accent-soft ring-1 ring-inset ring-accent/30" : "bg-surface-2/70",
+        )}
+      >
+        <SortableContext items={apps.map((a) => a.id)} strategy={verticalListSortingStrategy}>
           {apps.map((app) => (
-            <JobCard
-              key={app.id}
-              app={app}
-              color={color}
-              onOpen={onOpen}
-              onAdvance={onAdvance}
-              dimmed={!!query && !`${app.role} ${app.company} ${app.location}`.toLowerCase().includes(query.toLowerCase())}
-            />
+            <JobCard key={app.id} app={app} onOpen={onOpen} onAdvance={onAdvance} dragDisabled={filtering} />
           ))}
-          {apps.length === 0 && (
-            <div className="grid flex-1 place-items-center rounded-2xl border-2 border-dashed border-border p-4 text-center text-xs text-muted">
-              Drop a card here
-            </div>
-          )}
-        </div>
-      </SortableContext>
+        </SortableContext>
+        {apps.length === 0 && (
+          <p className="grid flex-1 place-items-center rounded-lg border border-dashed border-border-strong/70 px-4 py-8 text-center text-xs text-subtle">
+            {filtering ? "No matches" : empty}
+          </p>
+        )}
+      </div>
     </section>
   );
 }

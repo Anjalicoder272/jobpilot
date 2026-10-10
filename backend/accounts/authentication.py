@@ -1,4 +1,5 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import AuthenticationFailed, InvalidToken
 
 
 class CookieJWTAuthentication(JWTAuthentication):
@@ -8,5 +9,9 @@ class CookieJWTAuthentication(JWTAuthentication):
         token = request.COOKIES.get("access")
         if not token:
             return None
-        validated = self.get_validated_token(token)
-        return self.get_user(validated), validated
+        try:
+            validated = self.get_validated_token(token)
+            return self.get_user(validated), validated
+        except (InvalidToken, AuthenticationFailed):
+            # A stale cookie must not block login or public pages; IsAuthenticated still returns 401.
+            return None

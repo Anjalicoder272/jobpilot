@@ -20,6 +20,8 @@ services:
         generateValue: true
       - key: DJANGO_DEBUG
         value: "0"
+      - key: DJANGO_ADMIN_URL
+        sync: false   # e.g. ops-7f3k/ so the admin login isn't at the well-known /admin/
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
         sync: false   # e.g. https://<your-app>.vercel.app,https://jobpilot-api.onrender.com
       - key: GEMINI_API_KEY
