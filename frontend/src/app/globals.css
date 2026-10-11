@@ -301,6 +301,21 @@ select:focus-visible,
   display: none;
 }
 
+/* "Get started free": a soft light sweeps across on hover and the arrow nudges forward. */
+.shine { overflow: hidden; isolation: isolate; }
+.shine::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  transform: translateX(-120%) skewX(-20deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  transition: transform 700ms var(--ease-out);
+}
+.shine:hover::before { transform: translateX(120%) skewX(-20deg); }
+.nudge svg { transition: transform 200ms var(--ease-out); }
+.nudge:hover svg { transform: translateX(3px); }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -105,10 +105,7 @@ export default function Home() {
         <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-14 sm:px-6 sm:pt-24">
           <Parallax speed={-70} fadeOut className="mx-auto max-w-3xl">
           <div className="stagger text-center">
-            <p className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted shadow-xs">
-              <span className="h-1.5 w-1.5 rounded-full bg-success" /> Free while in beta
-            </p>
-            <h1 className="mt-6 text-[40px] font-semibold leading-[1.05] tracking-[-0.035em] sm:text-6xl">
+            <h1 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.035em] sm:text-6xl">
               Your job search,{" "}
               <span className="font-serif text-[1.08em] font-normal italic tracking-[-0.01em]">finally organised.</span>
             </h1>
@@ -117,7 +114,7 @@ export default function Home() {
               questions real candidates were asked.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-2.5 sm:flex-row">
-              <ButtonLink href="/signup" size="lg">
+              <ButtonLink href="/signup" size="lg" className="shine nudge">
                 Get started free <ArrowRight size={16} />
               </ButtonLink>
               <ButtonLink href="/experiences" size="lg" variant="secondary">
