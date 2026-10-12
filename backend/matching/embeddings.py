@@ -57,6 +57,21 @@ def embed_texts(texts: list[str], task: str = "RETRIEVAL_DOCUMENT", batch_size: 
     return vectors
 
 
+def query_embedding(text: str) -> list[float]:
+    """Embed a search query, cached in Redis for a day: popular searches ("system design", "react hooks")
+    then cost one Gemini call per day instead of one per search."""
+    import hashlib
+
+    from django.core.cache import cache
+
+    key = "q-emb:" + hashlib.sha256(" ".join(text.lower().split()).encode()).hexdigest()
+    vector = cache.get(key)
+    if vector is None:
+        vector = embed_texts([text], task="RETRIEVAL_QUERY")[0]
+        cache.set(key, vector, 24 * 3600)
+    return vector
+
+
 def cosine(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))

@@ -79,6 +79,7 @@ def ai_status(request):
         "model": services.ai_model_name(),
         "smart_search": embeddings_enabled(),
         "web_search": bool(settings.TAVILY_API_KEY),
+        "cache": "redis" if settings.REDIS_URL else "memory",
     })
 
 

@@ -1,4 +1,4 @@
-# Render Blueprint: creates the Django API and a PostgreSQL database.
+# Render Blueprint: creates the Django API, a PostgreSQL database and a Redis (Key Value) cache.
 # Render dashboard -> New -> Blueprint -> pick this repo.
 services:
   - type: web
@@ -16,6 +16,11 @@ services:
         fromDatabase:
           name: jobpilot-db
           property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: jobpilot-redis
+          property: connectionString
       - key: DJANGO_SECRET_KEY
         generateValue: true
       - key: DJANGO_DEBUG
@@ -30,6 +35,13 @@ services:
         sync: false   # real interview-experience posts on Company insights (optional)
       - key: ANTHROPIC_API_KEY
         sync: false
+
+  # Redis-compatible cache for web-search results, query embeddings and rate limits.
+  - type: keyvalue
+    name: jobpilot-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru   # when full, evict the least recently used keys (it's only a cache)
+    ipAllowList: []                # reachable only from services inside this Render account
 
 databases:
   - name: jobpilot-db

@@ -8,7 +8,7 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 from config.throttles import AIThrottle, SmartSearchThrottle
 
-from matching.embeddings import cosine, embed_texts, embeddings_enabled
+from matching.embeddings import cosine, embeddings_enabled, query_embedding
 
 from .ai import extract_questions
 
@@ -85,7 +85,7 @@ class ExperienceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
         if not embeddings_enabled():
             return Response({"detail": "Smart search needs a Gemini key."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            query_vector = embed_texts([request.query_params["search"].strip()[:MAX_SEARCH]], task="RETRIEVAL_QUERY")[0]
+            query_vector = query_embedding(request.query_params["search"].strip()[:MAX_SEARCH])
         except Exception:
             return Response({"detail": "Smart search is unavailable right now. Try normal search."},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)

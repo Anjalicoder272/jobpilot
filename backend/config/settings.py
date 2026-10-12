@@ -131,6 +131,24 @@ SESSION_COOKIE_HTTPONLY = True
 ADMIN_URL = os.environ.get("DJANGO_ADMIN_URL", "admin/").strip("/") + "/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Cache: Redis in production (REDIS_URL from Render Key Value), in-memory locally and in tests.
+# Holds web-search results, query embeddings and rate-limit counters. Redis is shared by all
+# gunicorn workers, so throttles count every request instead of one count per worker.
+REDIS_URL = os.environ.get("REDIS_URL", "").strip()
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "config.cache.FailSafeRedisCache",
+            "LOCATION": REDIS_URL,
+            "KEY_PREFIX": "jobpilot",
+            "TIMEOUT": 300,
+            # Fail fast: a slow Redis must never make a page slower than having no cache at all.
+            "OPTIONS": {"socket_connect_timeout": 1, "socket_timeout": 1},
+        }
+    }
+else:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
 REST_FRAMEWORK = {
     # The JWT is read from an httpOnly cookie (see accounts/authentication.py).
     "DEFAULT_AUTHENTICATION_CLASSES": ["accounts.authentication.CookieJWTAuthentication"],

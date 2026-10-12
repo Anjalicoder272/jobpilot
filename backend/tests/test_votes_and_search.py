@@ -62,7 +62,7 @@ def test_smart_search_finds_by_meaning():
         share(a, "Other", "Center a div three ways", "CSS")
     assert Question.objects.filter(embedding__isnull=False).count() == 2
 
-    with mock.patch("experiences.views.embed_texts", side_effect=fake_embed):
+    with mock.patch("matching.embeddings.embed_texts", side_effect=fake_embed):
         # "caching" shares no words with "TTL on Redis keys", but means something close.
         res = APIClient().get("/api/experiences/?search=caching&smart=1").data
     assert res["smart"] is True

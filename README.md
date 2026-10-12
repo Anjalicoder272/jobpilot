@@ -16,6 +16,7 @@ JobPilot also helps candidates get each application right. They can check their 
 - **"Prepare me" interview plan**: focus topics, a 3-day checklist, likely questions and tips for each interview.
 - **Company insights**: search any company and role to find real interview experiences from LeetCode, Glassdoor and Reddit, plus questions shared on JobPilot.
 - **Interview experiences**: browse and share experiences, with infinite scroll, filters, smart search by meaning, and "I was asked this too" votes.
+- **Redis caching**: web-search results (3 days), search embeddings (1 day) and rate-limit counters live in Redis, so repeat searches load in milliseconds and the paid search API is called once per company and role. If Redis is down, the app falls back to PostgreSQL instead of failing.
 - **Extract questions** from rough interview notes automatically.
 - **Privacy and moderation**: emails and phone numbers are removed from shared posts, and spam is held for review.
 - **Light and dark mode**, responsive on mobile and desktop.
@@ -24,6 +25,7 @@ JobPilot also helps candidates get each application right. They can check their 
 - **Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS, dnd-kit
 - **Backend:** Python, Django 5, Django REST Framework, JWT authentication
 - **Database:** PostgreSQL (SQLite for local development)
+- **Cache:** Redis (Render Key Value)
 - **AI and search:** Google Gemini, Tavily search API
 - **Testing and CI:** pytest, GitHub Actions
 - **Deployment:** Vercel (frontend), Render (backend and database)
@@ -45,5 +47,5 @@ jobpilot/
 │       ├── components/       UI components
 │       └── lib/              API client, auth, types
 ├── .github/workflows/        CI pipeline
-└── render.yaml               Render deployment config
+└── render.yaml               Render deployment config (API, PostgreSQL, Redis)
 ```

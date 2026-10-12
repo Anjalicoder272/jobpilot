@@ -4,7 +4,8 @@ using the Tavily search API.
 
 We only keep what a search engine shows: the title, a short preview and the link. The full post stays on
 the original site and the user clicks through to read it. Nothing is scraped or republished.
-Results are cached for 3 days per company + role, so each search uses the free quota only once.
+Results are cached for 3 days per company + role, so each search uses the free quota only once:
+Redis first (about a millisecond), then PostgreSQL (survives Redis restarts), then the Tavily API.
 """
 import json
 import logging
@@ -14,12 +15,14 @@ import urllib.request
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 
 from .models import ExperienceSearch
 
 log = logging.getLogger(__name__)
 CACHE_DAYS = 3
+CACHE_SECONDS = CACHE_DAYS * 24 * 3600
 TAVILY_URL = "https://api.tavily.com/search"
 
 # Only these sites are searched and shown, with a friendly label.
@@ -90,6 +93,11 @@ def normalise_results(raw: list[dict], company: str) -> list[dict]:
     return results[:12]
 
 
+def _cache_key(key: dict) -> str:
+    # Keys must not contain spaces ("sde 1"), so use underscores.
+    return f"web-exp:{key['company_key']}:{key['role_key']}".replace(" ", "_")
+
+
 def find_real_experiences(company: str, role: str, refresh: bool = False) -> list[dict] | None:
     """Return cached or fresh results. None means web search isn't configured."""
     if not web_search_enabled():
@@ -97,8 +105,17 @@ def find_real_experiences(company: str, role: str, refresh: bool = False) -> lis
     from .insights import normalise
 
     key = {"company_key": normalise(company), "role_key": normalise(role)}
+    redis_key = _cache_key(key)
+    if not refresh:
+        hit = cache.get(redis_key)
+        if hit is not None:
+            return hit
+
     cached = ExperienceSearch.objects.filter(**key).first()
     if cached and not refresh and cached.fetched_at > timezone.now() - timedelta(days=CACHE_DAYS):
+        # Warm Redis for the rest of the 3 days, so the next search skips the database too.
+        remaining = CACHE_SECONDS - (timezone.now() - cached.fetched_at).total_seconds()
+        cache.set(redis_key, cached.results, max(60, int(remaining)))
         return cached.results
     try:
         results = normalise_results(_tavily(f"{company} {role} interview experience"), company)
@@ -106,4 +123,5 @@ def find_real_experiences(company: str, role: str, refresh: bool = False) -> lis
         log.exception("Tavily search failed")
         return cached.results if cached else []  # keep old results rather than showing nothing
     ExperienceSearch.objects.update_or_create(**key, defaults={"results": results})
+    cache.set(redis_key, results, CACHE_SECONDS)
     return results
